@@ -15,4 +15,11 @@ def get_prompt(name:PromptFileName) -> str:
     with open(prompt_path,"r",encoding="utf-8") as file:
         return file.read()
 
+def get_prompt_path(name:PromptFileName) -> str:
+    return os.path.join("prompts", "prompt_file", name.value)
+
+def get_prompt_abs_path(name:PromptFileName) -> str:
+    return os.path.join( script_dir, "prompts", "prompt_file", name.value )
+
+
 

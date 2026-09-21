@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-env_path = os.path.join(script_dir,".env")
+env_path = os.path.join(os.path.dirname(script_dir),".env")
 print("加载 '.env' ",end="")
 print(f"{load_dotenv(env_path)}")
 
