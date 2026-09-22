@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-def write_file (txt_file_abs_path:str|Path, w_or_a:str="a", makedirsOrNot:bool=False, write_data:str="") -> str:
+def write_file (txt_file_abs_path:str|Path, w_or_a:str="w", makedirsOrNot:bool=True, write_data:str="") -> str:
     file_path = txt_file_abs_path
 
     if makedirsOrNot:

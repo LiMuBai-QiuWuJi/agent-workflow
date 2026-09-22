@@ -1,31 +1,5 @@
-# Windows thumbnail cache files
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-
-# Dump file
-*.stackdump
-
-# Folder config file
-[Dd]esktop.ini
-
-# Recycle Bin used on file shares
-$RECYCLE.BIN/
-
-# Windows Installer files
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.env
-.venv/
+.env
+demo_out/
+运行记录/
 __pycache__/
 *.pyc
-
-
-# Windows shortcuts
-*.lnk
-.chroma/
-model/

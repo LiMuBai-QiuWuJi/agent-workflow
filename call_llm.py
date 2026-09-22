@@ -243,7 +243,10 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
 
                     print(f"工具调用：{func_name}({args})")
                     if func_name in parameters.tool_map:
-                        result = parameters.tool_map[func_name](**args)
+                        try:
+                            result = parameters.tool_map[func_name](**args)
+                        except Exception as e:
+                            result = {"status":"error","message":f"工具执行失败：{type(e).__name__}: {e}"}
                     else:
                         result = {"status": "error", "message": f"未知工具：{func_name}"}
 

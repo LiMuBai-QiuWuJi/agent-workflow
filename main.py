@@ -100,13 +100,35 @@ from skill.write_file.tool import write_file
 ######################################
 
 import json
+import sys
+import time
 
 from call_llm import ApiKeyPool, CallParameters, ChatSession, USAGE_LOG, call_llm
 from core.dispatcher import dispatch
 from core.memory import Memory
 from core.team import Team
 
+
+class Tee:
+    """一分二输出：write 进来的每个字符同时给屏幕和文件，两边逐字一致。
+    traceback 走 stderr——main 里把它也指到 Tee 上，崩溃现场同样落盘。"""
+
+    def __init__(self, console, file):
+        self.console = console
+        self.file = file
+
+    def write(self, s):
+        self.console.write(s)
+        self.file.write(s)
+        return len(s)
+
+    def flush(self):
+        self.console.flush()
+        self.file.flush()
+
 PROJECT_ID = "demo"
+os.makedirs(os.path.join("demo_out", PROJECT_ID), exist_ok=True)
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def decompose(requirement: str) -> list[tuple[str, str]]:
@@ -115,9 +137,12 @@ def decompose(requirement: str) -> list[tuple[str, str]]:
     return [
         ("coder",
          f"任务：{requirement}\n"
-         f"请实现该需求对应的代码，并在产出末尾按【交付清单】格式声明生成的文件。"),
+         f"请实现该需求对应的代码，并在产出末尾按【交付清单】格式声明生成的文件。"
+         f"项目根目录{script_dir}, 后续操作在此目录上进行"
+         f"工作目录：demo_out/{PROJECT_ID}，请用 write_file 将代码写入该目录下的相对路径文件（如 demo_out/{PROJECT_ID}/fibonacci.py）"),
         ("tester",
          f"任务：针对以下需求，编写一份验收要点清单（供后续评审编码产出时使用）：{requirement}\n"
+         f"项目根目录{script_dir}, 后续操作在此目录上进行"
          f"要求：逐条列出功能正确性、边界情况两类检查点。"),
     ]
 
@@ -179,6 +204,9 @@ def run_shared(team: Team) -> int:
                 temperature=role.temperature,
                 max_tokens=role.max_tokens,
                 stream=False,
+                tools=role.tools,
+                tool_choice=role.tool_choice,
+                tool_map=role.tool_map,
                 context_mode="unlimited",  # 全量发送
             )
             call_llm(params, session=shared)
@@ -186,17 +214,30 @@ def run_shared(team: Team) -> int:
 
 
 def main() -> None:
-    team = Team.seed_builtin()
-    memory = Memory()
-    demo_isolation(team, memory)
+    # 运行记录落盘：屏幕与文件逐字一致，崩溃 traceback 也进文件
+    os.makedirs("运行记录", exist_ok=True)
+    log_path = os.path.join("运行记录", f"运行_{time.strftime('%Y%m%d_%H%M%S')}.txt")
+    log_file = open(log_path, "w", encoding="utf-8")
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    tee = Tee(old_stdout, log_file)
+    sys.stdout, sys.stderr = tee, tee
+    print(f"（本次运行同时记录到 {log_path}）")
 
-    print("\n===== 演示 2：token 对比（同批任务 × 两种形态）=====")
-    isolated_total = run_isolated(team)
-    shared_total = run_shared(team)
-    print(f"\n独立记忆（新形态）：6 次调用 prompt 合计 {isolated_total} tokens")
-    print(f"共享历史（旧形态）：6 次调用 prompt 合计 {shared_total} tokens")
-    print(f"共享/独立 = {shared_total / max(isolated_total, 1):.2f} 倍")
-    print("明细账单：" + json.dumps(USAGE_LOG, ensure_ascii=False))
+    try:
+        team = Team.seed_builtin()
+        memory = Memory()
+        demo_isolation(team, memory)
+
+        print("\n===== 演示 2：token 对比（同批任务 × 两种形态）=====")
+        isolated_total = run_isolated(team)
+        shared_total = run_shared(team)
+        print(f"\n独立记忆（新形态）：6 次调用 prompt 合计 {isolated_total} tokens")
+        print(f"共享历史（旧形态）：6 次调用 prompt 合计 {shared_total} tokens")
+        print(f"共享/独立 = {shared_total / max(isolated_total, 1):.2f} 倍")
+        print("明细账单：" + json.dumps(USAGE_LOG, ensure_ascii=False))
+    finally:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+        log_file.close()
 
 
 if __name__ == "__main__":

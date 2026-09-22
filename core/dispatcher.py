@@ -20,8 +20,11 @@ def dispatch(team: Team, role_key: str, task_content: str,
         user_input=task_content,
         temperature=role.temperature,
         max_tokens=role.max_tokens,
-        stream=False,          # 演示阶段非流式，输出干净便于核对
-        context_mode="recent", # Day 2 打开滑动窗口：发送前只保留最近 context_window 轮历史
+        stream=False,          
+        tools=role.tools,
+        tool_choice=role.tool_choice,
+        tool_map=role.tool_map,
+        context_mode="recent",
         context_window=10,     # 默认 10 轮（一轮 = user + assistant）
     )
     if memory is None:

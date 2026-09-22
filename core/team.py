@@ -1,5 +1,6 @@
 from prompts.get_prompt import PromptFileName,get_prompt_path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
 import os
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +19,9 @@ class Role:
     model: str          # 具体模型名："deepseek-flash"
     temperature: float = 0.4
     max_tokens: int = 4096
+    tools: list[dict] = field(default_factory=list)
+    tool_choice: str = "auto"
+    tool_map: dict[str, Callable] = field(default_factory=dict)
 
 
 class Team:
@@ -46,6 +50,13 @@ class Team:
     @classmethod
     def seed_builtin(cls) -> "Team":
         """播种内置编制：编码岗 + 测试岗。"""
+        from skill.calculator.schemas import CALCULATOR_SCHEMA
+        from skill.calculator.tool import calculator
+        from skill.read_file.schemas import READFILE_SCHEMAS
+        from skill.read_file.tool import read_file
+        from skill.write_file.schemas import WRITEFILE_SCHEMAS
+        from skill.write_file.tool import write_file
+
         team = cls()
         team.add_role(Role(
             key="coder", name="编码岗",
@@ -53,6 +64,12 @@ class Team:
             prompt_name=PromptFileName.CODER,
             engine="deepseek", model="deepseek-flash",
             temperature=0.4,
+            tools=[CALCULATOR_SCHEMA, WRITEFILE_SCHEMAS],
+            tool_choice="auto",
+            tool_map={
+                "calculator": calculator,
+                "write_file": write_file,
+            }
         ))
         team.add_role(Role(
             key="tester", name="测试岗",
@@ -60,5 +77,11 @@ class Team:
             prompt_name=PromptFileName.TESTER,
             engine="deepseek", model="deepseek-flash",
             temperature=0.2,   # 评审要稳，温度调低
+            tools=[CALCULATOR_SCHEMA, READFILE_SCHEMAS],
+            tool_choice="auto",
+            tool_map={
+                "calculator": calculator,
+                "read_file": read_file,
+            }
         ))
         return team
