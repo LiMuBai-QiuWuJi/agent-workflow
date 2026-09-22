@@ -10,6 +10,8 @@ from openai.types.chat import ChatCompletion
 script_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(script_dir, ".env")
 
+USAGE_LOG: list[dict] = []
+"""token 账单：每次成功调用的 {model, prompt, completion}，供对比实验汇总。"""
 
 class ApiKeyPool:
     """API Key 池：首次调用 get_key 时扫描 .env 与环境变量中所有含 API_KEY 的条目，
@@ -177,6 +179,12 @@ def _extract_stream(response: Stream[ChatCompletionChunk]) -> tuple[dict, bool]:
 
 
 def _extract_nonstream(response: ChatCompletion) -> tuple[dict, bool]:
+    if response.usage is not None:
+            USAGE_LOG.append({
+                "model": response.model,
+                "prompt": response.usage.prompt_tokens,
+                "completion": response.usage.completion_tokens,
+            })
     msg = response.choices[0].message
     msg_dict = msg.model_dump(exclude_none=True)
     has_tools = msg.tool_calls is not None and len(msg.tool_calls) > 0

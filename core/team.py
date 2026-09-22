@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 from prompts.get_prompt import PromptFileName,get_prompt_path
+from dataclasses import dataclass
 import os
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +39,7 @@ class Team:
     def load_prompt(self, role: Role) -> str:
         """读岗位的 system prompt 文件。资产在文件里，不在代码里。"""
         path = os.path.join(PROJECT_ROOT, get_prompt_path(role.prompt_name))
-        print(f"{path}")
+        # print(f"{path}")
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
 
