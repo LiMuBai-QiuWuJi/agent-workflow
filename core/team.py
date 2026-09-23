@@ -56,6 +56,8 @@ class Team:
         from skill.read_file.tool import read_file
         from skill.write_file.schemas import WRITEFILE_SCHEMAS
         from skill.write_file.tool import write_file
+        from skill.run_cmd.schemas import RUNCMD_SCHEMAS
+        from skill.run_cmd.tool import run_cmd
 
         team = cls()
         team.add_role(Role(
@@ -77,11 +79,12 @@ class Team:
             prompt_name=PromptFileName.TESTER,
             engine="deepseek", model="deepseek-flash",
             temperature=0.2,   # 评审要稳，温度调低
-            tools=[CALCULATOR_SCHEMA, READFILE_SCHEMAS],
+            tools=[CALCULATOR_SCHEMA, READFILE_SCHEMAS,RUNCMD_SCHEMAS],
             tool_choice="auto",
             tool_map={
                 "calculator": calculator,
                 "read_file": read_file,
+                "run_cmd":run_cmd
             }
         ))
         return team
