@@ -6,7 +6,7 @@ WRITEFILE_SCHEMAS={
         "parameters":{
             "type":"object",
             "properties":{
-                "txt_file_abs_path":{"type":"string","description":"待写入文件的完整绝对路径"},
+                "txt_file_abs_path":{"type":"string","description":"待写入文件的路径：相对项目根的相对路径（推荐，如 demo_out/demo/result.txt）或绝对路径"},
                 "w_or_a":{
                     "type":"string",
                     "enum":["w","a"],

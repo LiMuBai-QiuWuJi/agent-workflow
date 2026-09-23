@@ -1,6 +1,10 @@
+import os
 from pathlib import Path
 from pypdf import PdfReader
 from docx import Document
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))   # skill/read_file → 项目根
 
 def read_pdf(pdf_abs_path: str | Path) -> str:
     if pdf_abs_path == None or len(str(pdf_abs_path)) == 0:   # Path 无 len()，先转 str
@@ -83,9 +87,13 @@ def read_text(text_abs_path: str | Path) -> str:
 
 
 def read_file(file_abs_path: str | Path) -> str:
-    """输入文件绝对地址，根据文件后缀自动选择读取方法"""
+    """输入文件地址（相对项目根或绝对路径皆可），根据文件后缀自动选择读取方法"""
     if file_abs_path == None or len(str(file_abs_path)) == 0:
         return "输入路径为空"
+
+    # 路径锚定：相对路径一律以项目根为锚点（与 run_cmd 同标准），
+    # 绝对路径经 os.path.join 自动透传不变——从任何目录启动程序都能读对。
+    file_abs_path = os.path.join(PROJECT_ROOT, str(file_abs_path))
 
     # 取后缀，结果带点，如 ".pdf"，统一转小写防止 ".PDF" 匹配不上
     suffix = Path(file_abs_path).suffix.lower()
