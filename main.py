@@ -104,7 +104,7 @@ import sys
 import time
 
 from call_llm import USAGE_LOG
-from core.dispatcher import run_collaboration
+from core.dispatcher import run_review_chain
 from core.memory import Memory
 from core.team import Team
 
@@ -142,7 +142,7 @@ def main() -> None:
         team = Team.seed_builtin()
         memory = Memory()
         requirement = input("需求：")
-        run_collaboration(team, memory, PROJECT_ID, requirement)
+        run_review_chain(team, memory, PROJECT_ID, requirement)
 
         print("\n===== 本次运行账单 =====")
         for i, u in enumerate(USAGE_LOG, 1):
@@ -154,3 +154,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

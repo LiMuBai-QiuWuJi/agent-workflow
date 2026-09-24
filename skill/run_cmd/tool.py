@@ -10,7 +10,7 @@ OUTPUT_LIMIT = 2000   # 输出截断上限：工具结果要进模型上下文�
 def run_cmd(cmd: str, cwd: str = "", timeout_s: int = 30) -> dict:
     """在工作区内执行一条命令，返回 {status, returncode, output}。
     三道保险：cwd 沙箱（只允许项目根内的相对路径）、超时强杀、输出截断。"""
-    print(f"项目根目录: {PROJECT_ROOT}")
+    # print(f"项目根目录: {PROJECT_ROOT}")
     if not cmd or not cmd.strip():
         return {"status": "error", "message": "命令为空"}
 
