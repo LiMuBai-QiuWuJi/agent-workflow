@@ -3,8 +3,10 @@
 用法：在项目根目录运行 python test_review_chain_stub.py"""
 import contextlib
 import io
+import os
 
 import core.dispatcher as dispatcher
+from core.verifier import extract_declared_files, resolve_under
 
 CODER_V1 = "初始实现（有缺陷）\n【交付清单】\nfib.py\n[请求协作:tester] 请审查"
 CODER_V2 = "第 1 次修正\n【交付清单】\nfib.py\n[请求协作:tester] 请复审"
@@ -22,13 +24,21 @@ class FakeTeam:
         return FakeRole()
 
 
-def make_stub(coder_replies, tester_replies):
+def make_stub(coder_replies, tester_replies, create_files=True):
     iters = {"coder": iter(coder_replies), "tester": iter(tester_replies)}
     calls = {"coder": [], "tester": []}
 
     def stub(team, role_key, task_content, memory=None, project_id="demo"):
         calls[role_key].append(task_content)   # 记下任务文本，供断言"被通知第 N 次退回"
-        return next(iters[role_key])
+        reply = next(iters[role_key])
+        if create_files and role_key == "coder":
+            # 模拟编码岗 write_file：声明了什么就真写什么（核验的前提）
+            for f in extract_declared_files(reply):
+                p = resolve_under(f"demo_out/{project_id}", f)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w", encoding="utf-8") as fp:
+                    fp.write("# stub 写盘\n")
+        return reply
 
     return stub, calls
 
@@ -43,8 +53,11 @@ def scenario_pass_after_2_rejects():
     assert len(calls["coder"]) == 3 and len(calls["tester"]) == 3
     assert "第 1 次退回修改" in calls["coder"][1]   # 模型只在任务描述里被通知次数
     assert "第 2 次退回修改" in calls["coder"][2]
-    assert "闭环成功（任务#1，退回 2 次）" in buf.getvalue()
-    print("场景 1 通过：退回 2 次后复审通过，闭环成功")
+    out = buf.getvalue()
+    assert "闭环成功" in out
+    assert "退回 2 次" in out
+    assert "核验通过 1 个文件" in out
+    print("场景 1 通过：退回 2 次后复审通过，交付核验放行，闭环成功")
 
 
 def scenario_exceed_max_rejects():
@@ -62,7 +75,37 @@ def scenario_exceed_max_rejects():
     print("场景 2 通过：第 3 次不通过触发刹车，退回派发被拦死（连派发都不做）")
 
 
+def scenario_fake_done_caught():
+    # 编码岗声称写了 report.md，实际没写（create_files=False）
+    coder = "实现完成，报告已生成\n【交付清单】\nreport.md\n[请求协作:tester] 请审查"
+    stub, calls = make_stub([coder], [VERDICT_OK], create_files=False)
+    dispatcher.dispatch = stub
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+    out = buf.getvalue()
+    assert "交付核验失败" in out
+    assert "report.md" in out              # 缺失文件名进了失败现场
+    assert "闭环成功" not in out           # 关键：假完成绝不算完成
+    print("场景 3 通过：声明 report.md 实际未生成，核验判失败而非完成")
+
+
+def scenario_no_manifest():
+    coder = "该需求无需落盘文件，口头交付即可\n[请求协作:tester] 请审查"
+    stub, calls = make_stub([coder], [VERDICT_OK])
+    dispatcher.dispatch = stub
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+    out = buf.getvalue()
+    assert "契约违约" in out
+    assert "闭环成功" not in out
+    print("场景 4 通过：未声明交付清单按契约违约判失败（空清单不留后门）")
+
+
 if __name__ == "__main__":
     scenario_pass_after_2_rejects()
     scenario_exceed_max_rejects()
-    print("两场景全过——受控循环的每一格都不依赖模型心情")
+    scenario_fake_done_caught()
+    scenario_no_manifest()
+    print("四场景全过——受控循环与交付核验")
