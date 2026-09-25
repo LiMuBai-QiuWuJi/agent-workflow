@@ -1,9 +1,11 @@
 import os
 import re
+import shutil
 
 from call_llm import CallParameters, ChatSession, call_llm, ApiKeyPool
 from core.memory import Memory
 from core.team import Team
+from core.verifier import verify_delivery
 
 COLLAB_RE = re.compile(r"\[请求协作:([A-Za-z_\-]+)\]")
 """输出契约信号：[请求协作:岗位key] 协作说明"""
@@ -87,6 +89,7 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
     防扩散：测试岗产出即使再有 [请求协作:...]
     也不再解析——循环只在编码↔测试这一条边上往返，不产生新边。"""
     workspace = os.path.join("demo_out", project_id)
+    shutil.rmtree(workspace, ignore_errors=True)   # 工作区清零：
     os.makedirs(workspace, exist_ok=True)          # 环境事实由系统创建
 
     task_id = "任务#1"          # 编码任务 id：scheduler.md 输出契约的"任务#N"
@@ -136,10 +139,26 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
             tester_reply += "\n（调度系统注：评审岗未按输出契约给出结论，视为不通过）"
 
         if verdict == "通过":
-            print(f"\n===== 评审链闭环成功（{task_id}，退回 {reject_counts.get(task_id, 0)} 次）=====")
+            # 输入工作目相对目录和产出清单。获取规范后的绝对地址声明文件列表和缺失文件列表
+            declared, missing = verify_delivery(workspace, coder_reply)
+            if not declared:
+                print(f"\n===== {task_id} 交付核验失败：产出未声明【交付清单】"
+                      f"（契约违约），判失败 =====")
+                print("----- 终止现场：编码岗最后产出 -----\n" + coder_reply)
+                print("（将来增强：将缺失清单退回编码岗补齐——本版只终止并留现场）")
+                return
+            if missing:
+                print(f"\n===== {task_id} 交付核验失败：声明 {len(declared)} 个文件，"
+                      f"缺失 {missing}，判失败 =====")
+                print("----- 终止现场：编码岗最后产出 -----\n" + coder_reply)
+                return
+            print(f"\n===== 评审链闭环成功（{task_id}，退回 "
+                  f"{reject_counts.get(task_id, 0)} 次，"
+                  f"核验通过 {len(declared)} 个文件：{declared}）=====")
             return
 
-        # —— 不通过：先过刹车，再决定是否退回 ——
+
+        # —— 不通过：决定是否退回 ——
         n = next_reject(reject_counts, task_id)
         if n is None:
             print(f"\n===== {task_id} 评审失败：退回超上限（>{MAX_REJECT} 次），终止 =====")
