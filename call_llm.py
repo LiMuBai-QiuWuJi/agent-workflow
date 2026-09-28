@@ -319,6 +319,7 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
         except Exception as e:
             print(f"第 {attempt + 1} 次调用失败：{e}")
             if attempt < parameters.retries - 1:
-                time.sleep(parameters.retries_delay_s)
+                # 指数退避：2s → 4s → 8s……API 抖动期固定 2s 连撞三次全超时（2026-09-28 实测）
+                time.sleep(parameters.retries_delay_s * (2 ** attempt))
 
     raise RuntimeError(f"{parameters.retries} 次重试失败")

@@ -104,8 +104,9 @@ import sys
 import time
 
 from call_llm import USAGE_LOG
-from core.dispatcher import run_review_chain
+from core.dispatcher import plan_tasks, run_pipeline
 from core.memory import Memory
+from core.task_table import DirectReply, TaskTableError
 from core.team import Team
 
 
@@ -126,7 +127,7 @@ class Tee:
         self.file.flush()
 
 
-PROJECT_ID = "demo_2"
+PROJECT_ID = "demo_3"
 CONFIG_PATH = "run_config.txt"
 
 
@@ -151,6 +152,8 @@ def apply_run_config(team, config: dict) -> None:
     import core.dispatcher as dispatcher
     if config.get("api.base_url", "").strip():
         dispatcher.API_BASE_URL = config["api.base_url"].strip()
+    if config.get("api.timeout", "").strip():
+        dispatcher.TIMEOUT = float(config["api.timeout"])
     if config.get("dispatch.max_reject", "").strip():
         dispatcher.MAX_REJECT = int(config["dispatch.max_reject"])
     if config.get("dispatch.max_tool_rounds", "").strip():
@@ -183,8 +186,47 @@ def main() -> None:
         core_only = config.get("verify.core_only", "True").strip().lower() != "false"
 
         requirement = input("需求：")
-        run_review_chain(team, memory, PROJECT_ID, requirement,
-                         "", core_only, collab)
+
+        # 智能分工：调度岗（唯一做分工决策的 LLM）拿编制表+需求产出任务表 ——
+        events: list[dict] = []      # 事件流：Web 总览图/轨迹图与 SSE 的统一数据源
+        try:
+            tasks = plan_tasks(team, requirement, events)
+        except DirectReply as e:
+            # 问候/自我介绍/纯问答：调度岗直接应答，不拆解也不判失败。
+            # 队列/列表持有 plan dict 引用，原地改成 direct_reply（SSE 与 JSONL 同步）。
+            events[0].clear()
+            events[0].update({"event": "direct_reply", "answer": e.answer})
+            print(f"\n调度岗：{e.answer}")
+            tasks = None
+        except TaskTableError as e:
+            events[0].clear()
+            events[0].update({"event": "fail", "stage": "调度",
+                              "reason": "任务拆解契约违约", "raw": e.raw})
+            print(f"\n===== 任务拆解失败（调度契约违约），判失败 =====\n{e}")
+            tasks = None
+
+        if tasks:
+            # 用结构化任务表替换 plan 事件的 raw 正文（两张图的"调度拆解"节点数据源）
+            events[0] = {"event": "plan",
+                         "tasks": [{"id": t.id, "role": t.role_key,
+                                    "desc": t.description[:80],
+                                    "review_of": t.review_of,
+                                    "deliverable": t.deliverable,
+                                    "depends_on": t.depends_on}
+                                   for t in tasks]}
+            print("\n----- 调度岗任务表 -----")
+            for t in tasks:
+                tag = f"[评审 {t.review_of}] " if t.review_of else ""
+                dep = f"（依赖：{t.depends_on}）" if t.depends_on else ""
+                print(f"{t.id} [{t.role_key}] {tag}{t.description[:60]}…{dep}")
+            run_pipeline(team, memory, PROJECT_ID, tasks, core_only, collab, events)
+
+        # 事件流落盘：两张图先对录播开发，SSE 落地后同源切直播
+        events_path = os.path.join("运行记录", f"events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
+        with open(events_path, "w", encoding="utf-8") as f:
+            for i, e in enumerate(events, 1):
+                f.write(json.dumps({"seq": i, **e}, ensure_ascii=False) + "\n")
+        print(f"（事件流已记录到 {events_path}）")
 
         print("\n===== 本次运行账单 =====")
         for i, u in enumerate(USAGE_LOG, 1):

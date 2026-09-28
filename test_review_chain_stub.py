@@ -6,6 +6,7 @@ import io
 import os
 
 import core.dispatcher as dispatcher
+from core.task_table import Task
 from core.verifier import extract_declared_files, resolve_under
 
 CODER_V1 = "初始实现（有缺陷）\n【交付清单】\nfib.py\n[请求协作:tester] 请审查"
@@ -49,7 +50,7 @@ def scenario_pass_after_2_rejects():
     dispatcher.dispatch = stub
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
     assert len(calls["coder"]) == 3 and len(calls["tester"]) == 3
     assert "第 1 次退回修改" in calls["coder"][1]   # 模型只在任务描述里被通知次数
     assert "第 2 次退回修改" in calls["coder"][2]
@@ -66,7 +67,7 @@ def scenario_exceed_max_rejects():
     dispatcher.dispatch = stub
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
     assert "退回超上限" in buf.getvalue()
     assert len(calls["coder"]) == 3                  # 初始 1 次 + 退回 2 次
     assert len(calls["tester"]) == 3                 # 第 3 次评审仍发生，但…
@@ -82,7 +83,7 @@ def scenario_fake_done_caught():
     dispatcher.dispatch = stub
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
     out = buf.getvalue()
     assert "交付核验失败" in out
     assert "report.md" in out              # 缺失文件名进了失败现场
@@ -96,7 +97,7 @@ def scenario_no_manifest():
     dispatcher.dispatch = stub
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
     out = buf.getvalue()
     assert "契约违约" in out
     assert "闭环成功" not in out
@@ -106,6 +107,14 @@ def scenario_no_manifest():
 TRUNCATED_NO_SIGNAL = "实现写了一半（输出被 max_tokens 截断）"
 
 
+def make_tasks(desc="桩需求"):
+    """任务表驱动的评审链入参：任务#1 编码（配对评审）+ 任务#2 评审。"""
+    task = Task(id="任务#1", num=1, role_key="coder", description=desc)
+    review = Task(id="任务#2", num=2, role_key="tester",
+                  description="评审", review_of="任务#1")
+    return task, review
+
+
 def scenario_truncated_recovered():
     # 截断导致协作信号丢失 → 调度层回灌补发任务 → 编码岗补发信号 → 评审闭环
     coder_recovered = "补发契约信号\n【交付清单】\nfib.py\n[请求协作:tester] 请审查"
@@ -113,7 +122,7 @@ def scenario_truncated_recovered():
     dispatcher.dispatch = stub
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
     out = buf.getvalue()
     assert len(calls["coder"]) == 2                      # 初始 1 次 + 补发 1 次
     assert "截断" in calls["coder"][1] and "补发" in calls["coder"][1]
@@ -127,12 +136,43 @@ def scenario_truncated_recovery_fails():
     dispatcher.dispatch = stub
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
     out = buf.getvalue()
     assert "未发协作信号" in out
     assert "闭环成功" not in out
     assert len(calls["coder"]) == 2                      # 只补发一次，不无限重试
     print("场景 6 通过：补发后仍无信号，按契约终止（恢复只给一次）")
+
+
+def scenario_review_truncated_recovered():
+    # 评审产出截断丢结论 → 补发任务 → 评审补发结论 → 闭环（不冤枉扎实评审）
+    review_truncated = "实测记录较长（输出被 max_tokens 截断）"
+    stub, calls = make_stub([CODER_V1], [review_truncated, VERDICT_OK])
+    dispatcher.dispatch = stub
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
+    out = buf.getvalue()
+    assert len(calls["tester"]) == 2            # 初始评审 1 次 + 补发 1 次
+    assert "补发" in calls["tester"][1] and "不要重跑任何测试" in calls["tester"][1]
+    assert "闭环成功" in out and "退回 0 次" in out
+    print("场景 7 通过：评审截断丢结论，补发后闭环成功（退回额度不被冤烧）")
+
+
+def scenario_review_truncated_recovery_fails():
+    # 截断 → 补发仍无结论 → 按契约不通过退回 → 编码修正 → 复审通过
+    review_truncated = "实测记录较长（输出被 max_tokens 截断）"
+    stub, calls = make_stub([CODER_V1, CODER_V2],
+                            [review_truncated, review_truncated, VERDICT_OK])
+    dispatcher.dispatch = stub
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", *make_tasks())
+    out = buf.getvalue()
+    assert len(calls["tester"]) == 3            # 初始 + 补发 + 退回后复审
+    assert len(calls["coder"]) == 2             # 初始 + 第 1 次退回修改
+    assert "闭环成功" in out and "退回 1 次" in out
+    print("场景 8 通过：补发仍无结论按不通过退回一次，修正后复审闭环（补发只给一次）")
 
 
 if __name__ == "__main__":
@@ -142,4 +182,6 @@ if __name__ == "__main__":
     scenario_no_manifest()
     scenario_truncated_recovered()
     scenario_truncated_recovery_fails()
-    print("六场景全过——受控循环、交付核验与截断补发")
+    scenario_review_truncated_recovered()
+    scenario_review_truncated_recovery_fails()
+    print("八场景全过——受控循环、交付核验、双侧截断补发")

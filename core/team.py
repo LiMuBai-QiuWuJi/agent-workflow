@@ -47,6 +47,14 @@ class Team:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
 
+    def roster_text(self) -> str:
+        """编制表文本：调度岗看到的"团队有哪些岗位、各岗干什么"的唯一出处。
+        调度岗自己不进表——它不能被派活。"""
+        return "\n".join(
+            f"- {r.key}（{r.name}）：{r.duty}"
+            for r in self.roles.values() if r.key != "scheduler"
+        )
+
     @classmethod
     def seed_builtin(cls) -> "Team":
         """播种内置编制：编码岗 + 测试岗。"""
@@ -80,6 +88,7 @@ class Team:
             prompt_name=PromptFileName.TESTER,
             engine="deepseek", model="deepseek-flash",
             temperature=0.2,   # 评审要稳，温度调低
+            max_tokens=8192,   # 评审跑实测+写编号问题清单，4096 撞截断丢结论（2026-09-28 运行_20260928_144543 实测）
             tools=[CALCULATOR_SCHEMA, READFILE_SCHEMAS,RUNCMD_SCHEMAS],
             tool_choice="auto",
             tool_map={
@@ -87,5 +96,16 @@ class Team:
                 "read_file": read_file,
                 "run_cmd":run_cmd
             }
+        ))
+        team.add_role(Role(
+            key="scheduler", name="调度岗",
+            duty="拆解需求为子任务并定岗位（管理岗，不执行具体工作）",
+            prompt_name=PromptFileName.SCHEDULER,
+            engine="deepseek", model="deepseek-flash",
+            temperature=0.2,   # 拆解决策要稳
+            max_tokens=4096,
+            tools=[],          # 调度岗不碰工具：它只产出任务表
+            tool_choice="auto",
+            tool_map={}
         ))
         return team
