@@ -103,9 +103,43 @@ def scenario_no_manifest():
     print("场景 4 通过：未声明交付清单按契约违约判失败（空清单不留后门）")
 
 
+TRUNCATED_NO_SIGNAL = "实现写了一半（输出被 max_tokens 截断）"
+
+
+def scenario_truncated_recovered():
+    # 截断导致协作信号丢失 → 调度层回灌补发任务 → 编码岗补发信号 → 评审闭环
+    coder_recovered = "补发契约信号\n【交付清单】\nfib.py\n[请求协作:tester] 请审查"
+    stub, calls = make_stub([TRUNCATED_NO_SIGNAL, coder_recovered], [VERDICT_OK])
+    dispatcher.dispatch = stub
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+    out = buf.getvalue()
+    assert len(calls["coder"]) == 2                      # 初始 1 次 + 补发 1 次
+    assert "截断" in calls["coder"][1] and "补发" in calls["coder"][1]
+    assert "闭环成功" in out
+    print("场景 5 通过：截断致信号丢失，回灌补发任务后编码岗补发契约，闭环成功")
+
+
+def scenario_truncated_recovery_fails():
+    # 截断 → 补发机会给了 → 补发仍无信号 → 按契约终止（恢复不是无底洞）
+    stub, calls = make_stub([TRUNCATED_NO_SIGNAL, TRUNCATED_NO_SIGNAL], [VERDICT_OK])
+    dispatcher.dispatch = stub
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", "桩需求")
+    out = buf.getvalue()
+    assert "未发协作信号" in out
+    assert "闭环成功" not in out
+    assert len(calls["coder"]) == 2                      # 只补发一次，不无限重试
+    print("场景 6 通过：补发后仍无信号，按契约终止（恢复只给一次）")
+
+
 if __name__ == "__main__":
     scenario_pass_after_2_rejects()
     scenario_exceed_max_rejects()
     scenario_fake_done_caught()
     scenario_no_manifest()
-    print("四场景全过——受控循环与交付核验")
+    scenario_truncated_recovered()
+    scenario_truncated_recovery_fails()
+    print("六场景全过——受控循环、交付核验与截断补发")

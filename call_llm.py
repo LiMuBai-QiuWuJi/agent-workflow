@@ -208,27 +208,7 @@ def _extract_nonstream(response: ChatCompletion) -> tuple[dict, bool]:
 
 
 TRUNCATION_MARK = "（输出被 max_tokens 截断）"
-"""截断标记：finish_reason=="length" 时追加到产出末尾，供调度层区分"没话说"与"被掐断"。"""
-# 上面这行注释若被修改，记得同步改 _extract_stream/_extract_nonstream 里的两处字面量。
-
-TAIL_BACKUP_KEEP = 1500
-"""产出结尾备份保留字数。契约信号（【交付清单】/[请求协作:]/【评审结论:】）与截断标记
-都长在产出末尾：长产出或被截断时单独存一条结尾备份消息，信号与错误信息不随丢尾消失。"""
-
-
-def _add_tail_backup(session: "ChatSession", msg_dict: dict):
-    """双消息保底：产出较长或被截断时，在正常 assistant 消息之外再存一条「结尾备份」。
-    备份的是产出最后 TAIL_BACKUP_KEEP 字——契约信号与错误标记集中在末尾，从这里能找到。"""
-    content = msg_dict.get("content") or ""
-    truncated = content.endswith(TRUNCATION_MARK)
-    if len(content) < TAIL_BACKUP_KEEP and not truncated:
-        return                      # 短产出零开销，不备份
-    tail = content[-TAIL_BACKUP_KEEP:]
-    session.add_assistant(
-        content="【产出结尾备份】上文产出较长或被截断，以下为结尾部分"
-                "（【交付清单】/[请求协作:岗位key]/【评审结论:】与截断标记集中在末尾，优先从这段找）：\n"
-                + tail
-    )
+"""截断标记：finish_reason=="length" 时追加到产出末尾，供调度层识别"被掐断"并触发补发。"""
 
 
 def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
@@ -268,7 +248,6 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
                 msg_dict, has_tools = _request_once()
 
                 session.add_assistant(msg_dict=msg_dict)
-                _add_tail_backup(session, msg_dict)   # 双消息保底：结尾备份单独存，契约信号/错误标记不丢
 
                 if not has_tools:
                     final_reply = msg_dict.get("content", "")
@@ -323,6 +302,17 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
                     session.add_assistant(msg_dict=final_dict)
                     final_reply = final_dict.get("content", "") or "（工具轮数用尽，模型未给出文字结论）"
                     break
+
+            if TRUNCATION_MARK in final_reply:
+                # 截断补发（同轮内部闭环）：最终输出被 max_tokens 掐断时，
+                # 立刻要一次短回复把结论与契约信号补回来.限一次
+                session.add_user(
+                    "系统提示：你的上一段输出被 max_tokens 截断。不要重复前文，"
+                    "只补发最终结论与契约信号（【交付清单】/[请求协作:岗位key]），尽量精简。"
+                )
+                final_dict, _ = _request_once()
+                session.add_assistant(msg_dict=final_dict)
+                final_reply = final_dict.get("content", "") or final_reply
 
             return final_reply
 

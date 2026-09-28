@@ -1,0 +1,29 @@
+# ============================================================
+# 运行配置 —— main.py 启动时读取一次，改完需重启进程生效
+# 只放通用公用配置（任何需求都通用的部分）；本次运行的东西（需求等）启动时命令行输入
+# 格式 key=value；# 开头是注释；布尔项 True/False；留空 = 用代码默认值
+# ============================================================
+
+# ---------------- API ----------------
+api.base_url = https://api.deepseek.com
+
+# ---------------- 岗位参数（前缀 = 岗位key，属性名与 core/team.py 的 Role 一致）----------------
+# 编码岗
+coder.model = deepseek-flash
+coder.temperature = 0.4
+coder.max_tokens = 8192
+# 测试岗
+tester.model = deepseek-flash
+tester.temperature = 0.2
+tester.max_tokens = 4096
+
+# ---------------- 调度 ----------------
+# 多 Agent 协作模式：True = 编码→评审→退回闭环（默认）；False = 只跑编码岗单干，跳过评审链
+dispatch.collab = True
+# 是否只认核心交付物（通用验收口径）：True = 评审只验收核心交付物，附属产出不计入也不扣分；
+# False = 按交付清单逐项验收，不设硬指标
+verify.core_only = True
+# 同一任务最多退回次数（第 N+1 次不通过判失败终止）
+dispatch.max_reject = 2
+# 单次调用工具轮数上限（超限回灌收尾提示逼模型给结论）
+dispatch.max_tool_rounds = 15

@@ -127,6 +127,42 @@ class Tee:
 
 
 PROJECT_ID = "demo_2"
+CONFIG_PATH = "run_config.txt"
+
+
+def load_run_config(path: str = CONFIG_PATH) -> dict:
+    """运行配置：工程启动时读取一次，不实时重读（改配置需重启）。
+    格式 key=value，# 开头为注释；缺文件返回空 dict，不报错。"""
+    config = {}
+    if not os.path.exists(path):
+        return config
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            config[key.strip()] = value.strip()
+    return config
+
+
+def apply_run_config(team, config: dict) -> None:
+    """把配置真正应用到编制与调度参数（启动时一次；留空的项不覆盖代码默认值）。"""
+    import core.dispatcher as dispatcher
+    if config.get("api.base_url", "").strip():
+        dispatcher.API_BASE_URL = config["api.base_url"].strip()
+    if config.get("dispatch.max_reject", "").strip():
+        dispatcher.MAX_REJECT = int(config["dispatch.max_reject"])
+    if config.get("dispatch.max_tool_rounds", "").strip():
+        dispatcher.MAX_TOOL_ROUNDS = int(config["dispatch.max_tool_rounds"])
+    for role_key in ("coder", "tester"):
+        role = team.roles.get(role_key)
+        if role is None:
+            continue
+        for attr in ("model", "temperature", "max_tokens"):
+            value = config.get(f"{role_key}.{attr}", "").strip()
+            if value:
+                setattr(role, attr, type(getattr(role, attr))(value))
 
 
 def main() -> None:
@@ -141,8 +177,14 @@ def main() -> None:
     try:
         team = Team.seed_builtin()
         memory = Memory()
+        config = load_run_config()          # 启动读一次：只含通用公用配置
+        apply_run_config(team, config)      # 配置真正生效：岗位参数/循环刹车/API 地址/协作开关
+        collab = config.get("dispatch.collab", "True").strip().lower() != "false"
+        core_only = config.get("verify.core_only", "True").strip().lower() != "false"
+
         requirement = input("需求：")
-        run_review_chain(team, memory, PROJECT_ID, requirement)
+        run_review_chain(team, memory, PROJECT_ID, requirement,
+                         "", core_only, collab)
 
         print("\n===== 本次运行账单 =====")
         for i, u in enumerate(USAGE_LOG, 1):

@@ -2,7 +2,7 @@ import os
 import re
 import shutil
 
-from call_llm import CallParameters, ChatSession, call_llm, ApiKeyPool
+from call_llm import CallParameters, ChatSession, call_llm, ApiKeyPool, TRUNCATION_MARK
 from core.memory import Memory
 from core.team import Team
 from core.verifier import verify_delivery
@@ -15,7 +15,15 @@ VERDICT_RE = re.compile(r"【评审结论[:：](通过|不通过)】")
 
 MAX_REJECT = 2
 """同一任务最多退回 2 次：编码岗最多改 2 轮、最多经历 3 轮评审；
-第 3 次评审仍不通过 = 判失败终止。该上限归属于调度器管理。"""
+第 3 次评审仍不通过 = 判失败终止。该上限归属于调度器管理。
+可在 run_config.txt 用 dispatch.max_reject 覆盖（启动时读一次）。"""
+
+MAX_TOOL_ROUNDS = 15
+"""工具调用轮数上限：超限回灌收尾提示逼模型给结论。
+可在 run_config.txt 用 dispatch.max_tool_rounds 覆盖。"""
+
+API_BASE_URL = "https://api.deepseek.com"
+"""LLM API 地址。可在 run_config.txt 用 api.base_url 覆盖。"""
 
 
 def extract_collaboration(reply: str) -> tuple[str, str] | None:
@@ -58,7 +66,7 @@ def dispatch(team: Team, role_key: str, task_content: str,
     role = team.get(role_key)
     params = CallParameters(
         api_key=ApiKeyPool.get_key(role.engine),
-        base_url="https://api.deepseek.com",
+        base_url=API_BASE_URL,
         model=role.model,
         system_prompt=team.load_prompt(role),
         user_input=task_content,
@@ -68,6 +76,7 @@ def dispatch(team: Team, role_key: str, task_content: str,
         tools=role.tools,
         tool_choice=role.tool_choice,
         tool_map=role.tool_map,
+        max_tool_rounds=MAX_TOOL_ROUNDS,
         context_mode="recent",
         context_window=10,     # 默认 10 轮（一轮 = user + assistant）
     )
@@ -81,13 +90,20 @@ def dispatch(team: Team, role_key: str, task_content: str,
 
 
 def run_review_chain(team: Team, memory: Memory, project_id: str,
-                     requirement: str) -> None:
+                     requirement: str,
+                     core_deliverable: str = "",
+                     core_only: bool = True,
+                     collab: bool = True) -> None:
     """调度入口：编码 → 评审 → 通过则闭环；不通过则退回修改 → 再评审，
     全程无人工干预（防链式扩散下的受控循环）。
 
     星型调度：退回/终止的决定权全在这份确定性代码里，岗位只发信号。
     防扩散：测试岗产出即使再有 [请求协作:...]
-    也不再解析——循环只在编码↔测试这一条边上往返，不产生新边。"""
+    也不再解析——循环只在编码↔测试这一条边上往返，不产生新边。
+
+    core_deliverable + core_only：声明核心交付物且 core_only=True 时评审只认它；
+    core_only=False 时验收以交付清单为准，不设硬指标。
+    collab：多 Agent 协作总开关；False = 只跑编码岗单干，跳过评审链。"""
     workspace = os.path.join("demo_out", project_id)
     shutil.rmtree(workspace, ignore_errors=True)   # 工作区清零：
     os.makedirs(workspace, exist_ok=True)          # 环境事实由系统创建
@@ -96,8 +112,21 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
     review_id = "任务#2"        # 评审任务 id：退回计数挂在编码任务上，评审任务只读
     reject_counts: dict[str, int] = {}   # 受控循环的计数字典
 
+    # 交付约束：写进岗位任务文本（自包含原则）；
+    # 依赖外部文件怎么评审由 tester.md 的铁律管，不放任务文本
+    coder_constraint = (
+        f"核心交付物：{core_deliverable}（必须交付，评审只认它）；"
+        f"附属产出不限，需要就生成，一并写入交付清单。\n" if core_deliverable else ""
+    )
+    tester_constraint = (
+        f"核心交付物：{core_deliverable}；只按核心交付物验收，"
+        f"附属产出不计入也不扣分，文件数量与拆分方式不构成「与需求不符」。\n"
+        if (core_deliverable and core_only) else ""
+    )
+
     coder_task = (
         f"{task_id} 任务：{requirement}\n"
+        f"{coder_constraint}"
         f"请实现该需求对应的代码，并用 write_file 写入 {workspace}/ 下的相对路径文件，\n"
         f"产出末尾按【交付清单】格式声明生成的文件。\n"
         f"完成后按输出契约请求测试岗评审：[请求协作:tester] 请审查上述实现与交付文件。"
@@ -105,8 +134,24 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
     coder_reply = dispatch(team, "coder", coder_task, memory=memory, project_id=project_id)
     print(f"\n----- 编码岗产出（初始） -----\n{coder_reply}")
 
+    if not collab:
+        print("\n（多 Agent 协作模式已关闭：只跑编码岗，跳过评审链）")
+        return
+
     while True:
         collab = extract_collaboration(coder_reply)
+        if collab is None and TRUNCATION_MARK in coder_reply:
+            # 截断导致的信号缺失,让编码岗把契约信号补发出来
+            recover_task = (
+                f"{task_id} 收尾补发：你的上一版产出被 max_tokens 截断，"
+                f"输出契约信号（【交付清单】与 [请求协作:tester]）已丢失。\n"
+                f"不要重写代码。请直接基于已写入 {workspace}/ 的文件，仅补发两样：\n"
+                f"1)【交付清单】声明实际生成的文件相对路径；\n"
+                f"2)[请求协作:tester] 请审查上述实现与交付文件。"
+            )
+            coder_reply = dispatch(team, "coder", recover_task, memory=memory, project_id=project_id)
+            print(f"\n----- 编码岗产出（截断补发） -----\n{coder_reply}")
+            collab = extract_collaboration(coder_reply)
         if collab is None:
             print("（编码岗未发协作信号——无法进入评审，终止；完整现场见上方产出）")
             return
@@ -124,6 +169,7 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
         # )
         collab_task = (
         f"{review_id} 任务：编码岗完成「{requirement}」后请求你（{role.name}）配合：{note}\n"
+        f"{tester_constraint}"
         f"相关产出（含交付清单）：\n{coder_reply}\n"
         f"工作目录：{workspace}/"
 )
@@ -171,6 +217,7 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
         # 第 N 次退回（模型被通知，不自报）+ 环境事实。
         coder_task = (
             f"{task_id} 任务（第 {n} 次退回修改）：{requirement}\n"
+            f"{coder_constraint}"
             f"你的上一版产出被评审不通过。上一版产出：\n{coder_reply}\n"
             f"评审结论与编号问题清单（逐条修正，不要重写全部）：\n{tester_reply}\n"
             f"请修正后用 write_file 覆盖写入 {workspace}/ 下的原相对路径文件，\n"
