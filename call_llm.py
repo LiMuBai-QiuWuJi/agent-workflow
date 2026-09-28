@@ -175,8 +175,8 @@ def _extract_stream(response: Stream[ChatCompletionChunk]) -> tuple[dict, bool]:
 
     if finish_reason == "length":
         # 截断感知：finish_reason=="length" = 被 max_tokens 掐断，不是"模型没话说"
-        assistant_content += "（输出被 max_tokens 截断）"
-        print("（输出被 max_tokens 截断）")
+        assistant_content += TRUNCATION_MARK
+        print(TRUNCATION_MARK)
 
     msg_dict = {"role": "assistant", "content": assistant_content}
     has_tools = len(accumulated_tool_calls) > 0
@@ -198,13 +198,37 @@ def _extract_nonstream(response: ChatCompletion) -> tuple[dict, bool]:
     msg_dict = msg.model_dump(exclude_none=True)
     if response.choices[0].finish_reason == "length":
         # 截断感知：被 max_tokens 掐断时打标记，让调度层区分"没话说"与"被掐断"
-        msg_dict["content"] = (msg_dict.get("content") or "") + "（输出被 max_tokens 截断）"
+        msg_dict["content"] = (msg_dict.get("content") or "") + TRUNCATION_MARK
     has_tools = msg.tool_calls is not None and len(msg.tool_calls) > 0
     if has_tools:
         print(f"DeepSeek: [调用工具 {len(msg.tool_calls)} 个]")
     else:
         print(f"DeepSeek: {msg_dict.get('content', '')}")
     return msg_dict, has_tools
+
+
+TRUNCATION_MARK = "（输出被 max_tokens 截断）"
+"""截断标记：finish_reason=="length" 时追加到产出末尾，供调度层区分"没话说"与"被掐断"。"""
+# 上面这行注释若被修改，记得同步改 _extract_stream/_extract_nonstream 里的两处字面量。
+
+TAIL_BACKUP_KEEP = 1500
+"""产出结尾备份保留字数。契约信号（【交付清单】/[请求协作:]/【评审结论:】）与截断标记
+都长在产出末尾：长产出或被截断时单独存一条结尾备份消息，信号与错误信息不随丢尾消失。"""
+
+
+def _add_tail_backup(session: "ChatSession", msg_dict: dict):
+    """双消息保底：产出较长或被截断时，在正常 assistant 消息之外再存一条「结尾备份」。
+    备份的是产出最后 TAIL_BACKUP_KEEP 字——契约信号与错误标记集中在末尾，从这里能找到。"""
+    content = msg_dict.get("content") or ""
+    truncated = content.endswith(TRUNCATION_MARK)
+    if len(content) < TAIL_BACKUP_KEEP and not truncated:
+        return                      # 短产出零开销，不备份
+    tail = content[-TAIL_BACKUP_KEEP:]
+    session.add_assistant(
+        content="【产出结尾备份】上文产出较长或被截断，以下为结尾部分"
+                "（【交付清单】/[请求协作:岗位key]/【评审结论:】与截断标记集中在末尾，优先从这段找）：\n"
+                + tail
+    )
 
 
 def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
@@ -244,6 +268,7 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
                 msg_dict, has_tools = _request_once()
 
                 session.add_assistant(msg_dict=msg_dict)
+                _add_tail_backup(session, msg_dict)   # 双消息保底：结尾备份单独存，契约信号/错误标记不丢
 
                 if not has_tools:
                     final_reply = msg_dict.get("content", "")
