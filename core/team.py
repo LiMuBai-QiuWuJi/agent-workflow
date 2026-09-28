@@ -66,6 +66,7 @@ class Team:
             prompt_name=PromptFileName.CODER,
             engine="deepseek", model="deepseek-flash",
             temperature=0.4,
+            max_tokens=8192,   # 重写大文件时 4096 会撞截断：参数 JSON 被掐断 + 信号发不出（2026-09-28 实测）
             tools=[CALCULATOR_SCHEMA, WRITEFILE_SCHEMAS],
             tool_choice="auto",
             tool_map={

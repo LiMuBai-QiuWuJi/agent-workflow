@@ -255,7 +255,17 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
                     try:
                         args = json.loads(args_str)
                     except json.JSONDecodeError:
-                        args = {}
+                        # 参数 JSON 不完整多半是输出撞 max_tokens 被掐断在参数中间：
+                        # 不能静默按空参执行（会假成功/误调用），把截断作为错误回灌让模型缩小输出重来
+                        result = {"status": "error",
+                                  "message": f"工具 {func_name} 参数 JSON 解析失败：参数可能被 max_tokens 截断。"
+                                             "请缩小单次输出（分段写入/精简参数）后重试"}
+                        print(f"工具调用：{func_name}(参数 JSON 解析失败，按截断错误回灌)")
+                        session.add_tools(
+                            tool_call_id=tc["id"],
+                            content=json.dumps(result, ensure_ascii=False),
+                        )
+                        continue
 
                     print(f"工具调用：{func_name}({args})")
                     if func_name in parameters.tool_map:
