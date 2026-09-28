@@ -1,0 +1,7 @@
+{"seq": 1, "event": "plan", "tasks": [{"id": "任务#1", "role": "coder", "desc": "需求背景：需要一个把 CSV 字符串解析为字典列表的 Python 函数，最终保存为 csv_parse.py。请实现函数 parse_csv(csv_text", "review_of": null, "deliverable": "csv_parse.py", "depends_on": []}, {"id": "任务#2", "role": "tester", "desc": "评审重点：审查 csv_parse.py 是否实现 parse_csv 函数并能把 CSV 字符串解析为字典列表；验证 has_header=True 时首行作", "review_of": "任务#1", "deliverable": "", "depends_on": [1]}]}
+{"seq": 2, "event": "task_start", "task_id": "任务#1", "role": "coder", "has_review": true}
+{"seq": 3, "event": "dispatch", "task_id": "任务#1", "role": "coder"}
+{"seq": 4, "event": "review", "task_id": "任务#2", "for_task": "任务#1", "role": "tester"}
+{"seq": 5, "event": "verdict", "task_id": "任务#1", "verdict": "通过"}
+{"seq": 6, "event": "verified", "task_id": "任务#1", "declared": ["demo_out/demo_3/csv_parse.py", "demo_out/demo_3/test_csv_parse.py"]}
+{"seq": 7, "event": "done", "task_id": "任务#1", "rejects": 0, "declared": ["demo_out/demo_3/csv_parse.py", "demo_out/demo_3/test_csv_parse.py"]}

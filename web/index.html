@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多 Agent 团队编排 · 运行视图</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171e2e; --border: #2a3348;
+    --text: #dbe2ee; --muted: #8a94a8;
+    --active: #3b82f6; --done: #22c55e; --fail: #ef4444; --pending: #3a4358;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px;
+           background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .title { font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .runbar { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 320px; }
+  #req { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border);
+         background: #101728; color: var(--text); font-size: 14px; }
+  #req:disabled { color: var(--muted); }
+  select, button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
+         background: #101728; color: var(--text); font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--active); }
+  #status { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  main { display: block; padding: 14px 20px; max-width: 1100px; margin: 0 auto; }
+  .chart-card { background: var(--panel); border: 1px solid var(--border);
+                border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; }
+  .chart-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  svg { width: 100%; height: auto; display: block; }
+  /* 汉堡抽屉：配置编辑 + 演示回放都收进右上角菜单 */
+  #hamburger { font-size: 17px; line-height: 1; padding: 7px 12px; }
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.45);
+          opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 40; }
+  .mask.open { opacity: 1; pointer-events: auto; }
+  aside.drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 400px;
+                 max-width: 94vw; background: var(--panel); border-left: 1px solid var(--border);
+                 z-index: 50; transform: translateX(102%);
+                 transition: transform .25s ease-out; padding: 16px 18px; overflow-y: auto; }
+  aside.drawer.open { transform: translateX(0); }
+  aside.drawer .sec-title { font-size: 13px; color: var(--muted); margin: 20px 0 8px; }
+  aside.drawer .sec-title:first-child { margin-top: 0; }
+  #configEdit { width: 100%; min-height: 340px; background: #101728; color: var(--text);
+                border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+                font-family: Consolas, monospace; font-size: 12px; line-height: 1.6;
+                resize: vertical; }
+  #configEdit[readonly] { color: var(--muted); }
+  #cfgRow { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  #cfgHint { font-size: 11px; color: var(--muted); }
+  #replayRow { display: flex; gap: 8px; }
+  #replayRow select { flex: 1; }
+  /* 总览节点状态 */
+  .ov-node rect { fill: #1c2436; stroke: var(--pending); stroke-width: 1.5; transition: all .3s; }
+  .ov-node text { fill: var(--muted); font-size: 14px; text-anchor: middle; transition: fill .3s; }
+  .ov-node.active rect { fill: #12315e; stroke: var(--active);
+        filter: drop-shadow(0 0 6px rgba(59,130,246,.7)); }
+  .ov-node.active text { fill: #fff; }
+  .ov-node.done rect { fill: #0f2e1c; stroke: var(--done); }
+  .ov-node.done text { fill: var(--done); }
+  .ov-node.fail rect { fill: #3a1518; stroke: var(--fail); }
+  .ov-node.fail text { fill: var(--fail); }
+  /* 轨迹节点 */
+  .tr-node rect { fill: #1c2436; stroke: var(--pending); stroke-width: 1.5; }
+  .tr-node text { fill: var(--text); font-size: 12px; text-anchor: middle; }
+  .tr-node .sub { fill: var(--muted); font-size: 10px; }
+  .tr-node.end-ok rect { fill: #0f2e1c; stroke: var(--done); }
+  .tr-node.end-bad rect { fill: #3a1518; stroke: var(--fail); }
+  .tr-edge { stroke: var(--pending); stroke-width: 1.5; fill: none; }
+  .tr-edge.back { stroke-width: 2; stroke-dasharray: 6 4; }
+  .tr-label { font-size: 11px; text-anchor: middle; }
+  /* Mermaid 总览图：实时亮灯态 */
+  .ov-tools { float: right; display: flex; gap: 6px; align-items: center; }
+  .ov-tools button { padding: 1px 10px; font-size: 13px; line-height: 1.5; }
+  .ov-tools .hint { font-size: 11px; color: var(--muted); }
+  #ov-zoom { overflow: auto; max-height: 64vh; border-radius: 8px; }
+  #ov-mermaid { transform-origin: 0 0; transition: transform .12s ease-out;
+                display: inline-block; min-width: 100%; }
+  #ov-mermaid svg { max-width: none !important; width: 100%; height: auto; display: block; }
+  g.node rect, g.node polygon { transition: stroke .3s; }
+  g.node.lit-active rect, g.node.lit-active polygon {
+    stroke: var(--active) !important; stroke-width: 3px !important;
+    filter: drop-shadow(0 0 8px rgba(59,130,246,.8)); }
+  g.node.lit-done rect, g.node.lit-done polygon {
+    stroke: var(--done) !important; stroke-width: 3px !important; }
+  g.node.lit-fail rect, g.node.lit-fail polygon {
+    stroke: var(--fail) !important; stroke-width: 3px !important;
+    filter: drop-shadow(0 0 8px rgba(239,68,68,.8)); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"
+        onerror="window.__mermaidFailed=true"></script>
+</head>
+<body>
+<header>
+  <div class="title">多 Agent 团队编排 · 运行视图</div>
+  <div class="runbar">
+    <input id="req" placeholder="输入需求，回车运行（FastAPI+SSE 接入后开放）" disabled>
+    <span id="status">就绪</span>
+  </div>
+  <button id="hamburger" title="菜单：配置 / 演示回放">☰</button>
+</header>
+<main>
+  <section class="charts">
+    <div class="chart-card">
+      <div class="chart-title">
+        总览 · 事实流程（当前阶段亮灯，与 08-流程图记录 图一同源）
+        <span class="ov-tools">
+          <button id="ovOut" title="缩小">－</button>
+          <button id="ovReset" title="复位">1:1</button>
+          <button id="ovIn" title="放大">＋</button>
+          <span id="ovScaleVal" class="hint">100%</span>
+          <span class="hint">滚轮缩放 · 边缘滚动平移</span>
+        </span>
+      </div>
+      <div id="ov-zoom"><div id="ov-mermaid"></div></div>
+      <svg id="overview" viewBox="0 0 720 170" style="display:none"></svg>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">轨迹 · 本次运行走过的路径（退回带循环编号与颜色）</div>
+      <svg id="trace" viewBox="0 0 720 460"></svg>
+    </div>
+  </section>
+</main>
+<div id="mask" class="mask"></div>
+<aside id="drawer" class="drawer">
+  <div class="sec-title">运行配置（run_config.txt，可编辑）</div>
+  <textarea id="configEdit" readonly>加载中……</textarea>
+  <div id="cfgRow">
+    <button id="btnSaveCfg">保存配置</button>
+    <span id="cfgHint">保存后需重启服务生效</span>
+  </div>
+  <div class="sec-title">演示回放（录播，仅演示用）</div>
+  <div id="replayRow">
+    <select id="replaySel">
+      <option value="replay.jsonl">真实运行（退回 0 次）</option>
+      <option value="replay_reject.jsonl">含退回循环（退回 2 次）</option>
+    </select>
+    <button id="btnReplay">▶ 重播</button>
+  </div>
+</aside>
+<script>
+"use strict";
+const SVGNS = "http://www.w3.org/2000/svg";
+const ROUND_COLOR = { 1: "#3b82f6", 2: "#f59e0b" };
+const roundColor = n => ROUND_COLOR[n] || "#ef4444";
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ================= 总览图：Mermaid 专业流程图（CDN 失败回退手绘版） ================= */
+/* 与 工程档案 08-流程图记录.md 图一同一图例：蓝=调度代码 黄=岗位执行 紫=交付核验 红=失败 绿=闭环 */
+const OV_MMD = `flowchart TD
+    A["需求输入<br/>终端 或 POST /run"]:::code --> B["调度岗拆解 LLM<br/>编制表 + 需求 → 任务表"]:::llm
+    B -- "契约违约" --> B1["判失败：打印调度现场"]:::fail
+    B --> C["任务表解析校验（纯代码）<br/>编号 / 岗位 / 评审对象 / 依赖"]:::code
+    C --> D["按任务表派发 任务#N<br/>自包含任务描述"]:::code
+    D --> E["编码岗执行<br/>LLM + 工具 write_file"]:::llm
+    E --> F{"解析协作信号（纯代码）"}:::code
+    F -- "无信号" --> F1["终止：无法进入评审"]:::fail
+    F -- "解析到" --> G["配对评审任务派发<br/>评审岗由任务表指定"]:::code
+    G --> H["评审岗执行<br/>LLM + 工具 read_file / run_cmd"]:::llm
+    H --> I{"解析评审结论（纯代码）"}:::code
+    I -- "缺失" --> I1["视为不通过<br/>契约即合同"]:::code
+    I -- "通过/不通过" --> J{"结论 = 通过 ?"}:::code
+    I1 --> J
+    J -- "不通过" --> K{"退回计数<br/>dict 任务id · MAX_REJECT=2"}:::code
+    K -- "超上限" --> K1["判失败终止<br/>打印双方现场"]:::fail
+    K -- "未超" --> L["打包退回任务（自包含）<br/>原产出 + 问题清单 + 第N次退回"]:::code
+    L -- "受控循环：同一协作边往返" --> E
+    J -- "通过" --> M["交付核验 verify_delivery<br/>纯代码零 LLM · 逐项 isfile"]:::verify
+    M --> N{"声明文件全在盘上 ?"}:::code
+    N -- "空清单 / 缺失" --> N1["判失败：契约违约 / 假完成"]:::fail
+    N -- "全在" --> O["闭环成功<br/>退回N次 · 核验通过M个文件"]:::ok
+    classDef code fill:#16202f,stroke:#3b82f6,color:#c7d5ea
+    classDef llm fill:#241d10,stroke:#f59e0b,color:#e8d5b0
+    classDef verify fill:#221429,stroke:#a855f7,color:#d9c2ea
+    classDef fail fill:#2b1215,stroke:#ef4444,color:#f3b3b7
+    classDef ok fill:#0f2318,stroke:#22c55e,color:#a9e6bd`;
+
+/* 事件键 → Mermaid 节点 id（亮灯映射） */
+const OV_MAP = { plan: ["B"], code: ["E"], review: ["H"], verify: ["M"], done: ["O"] };
+
+let ovMode = "pending";       // mermaid | fallback
+const ovState = {};           // 兜底模式的状态表（沿用原实现）
+let ovLit = [];               // mermaid 模式下当前亮着的节点
+
+function ovNode(id) {
+  return document.querySelector(`#ov-mermaid svg [id^="flowchart-${id}-"]`);
+}
+
+async function initOverview() {
+  try {
+    if (window.__mermaidFailed || !window.mermaid) throw new Error("mermaid CDN 未加载");
+    mermaid.initialize({
+      startOnLoad: false, securityLevel: "loose", theme: "base",
+      flowchart: { curve: "basis", htmlLabels: true },
+      themeVariables: {
+        background: "#171e2e", primaryColor: "#1c2436", primaryTextColor: "#dbe2ee",
+        primaryBorderColor: "#3a4358", lineColor: "#3a4358", edgeLabelBackground: "#171e2e",
+        fontSize: "13px",
+      },
+    });
+    const { svg } = await mermaid.render("ovgraph", OV_MMD);
+    document.getElementById("ov-mermaid").innerHTML = svg;
+    ovMode = "mermaid";
+  } catch (err) {
+    ovMode = "fallback";      // CDN 不可用：退回手绘简版，功能不丢
+    document.getElementById("ov-mermaid").style.display = "none";
+    document.getElementById("overview").style.display = "";
+    buildFallbackOverview();
+  }
+}
+
+function ovSet(key, state) {
+  if (ovMode === "mermaid") {
+    for (const n of ovLit) n.classList.remove("lit-active", "lit-done", "lit-fail");
+    ovLit = [];
+    if (state === "pending") return;
+    for (const id of (OV_MAP[key] || [])) {
+      const n = ovNode(id);
+      if (n) { n.classList.add("lit-" + state); ovLit.push(n); }
+    }
+    return;
+  }
+  ovState[key] = state;
+  const g = document.getElementById("ov-" + key);
+  if (g) g.setAttribute("class", "ov-node" + (state === "pending" ? "" : " " + state));
+}
+
+function ovLoop(round) {
+  if (ovMode === "mermaid") {
+    const n = ovNode("K");    // 退回计数 diamond 按轮次着色点亮
+    if (n) {
+      n.classList.add("lit-active");
+      ovLit.push(n);
+    }
+    return;
+  }
+  const p = document.getElementById("ov-loop");
+  const t = document.getElementById("ov-loop-label");
+  p.setAttribute("stroke", roundColor(round));
+  p.setAttribute("opacity", 1);
+  t.setAttribute("fill", roundColor(round));
+  t.setAttribute("opacity", 1);
+  t.textContent = "退回 #" + round;
+}
+
+/* ---- 兜底：原手绘五节点简版 ---- */
+const OV_NODES = [
+  { key: "plan",   label: "调度拆解", x: 80 },
+  { key: "code",   label: "编码",     x: 230 },
+  { key: "review", label: "评审",     x: 380 },
+  { key: "verify", label: "交付核验", x: 530 },
+  { key: "done",   label: "完成",     x: 668 },
+];
+
+function buildFallbackOverview() {
+  const ov = document.getElementById("overview");
+  const defs = el("defs", {}, ov);
+  const marker = el("marker", {
+    id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5,
+    markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse",
+  }, defs);
+  el("path", { d: "M0,0 L10,5 L0,10 z", fill: "#3a4358" }, marker);
+  for (let i = 0; i < OV_NODES.length - 1; i++) {
+    const a = OV_NODES[i], b = OV_NODES[i + 1];
+    el("line", {
+      x1: a.x + 48, y1: 92, x2: b.x - 52, y2: 92,
+      stroke: "#3a4358", "stroke-width": 1.5, "marker-end": "url(#arrow)",
+    }, ov);
+  }
+  const loop = el("path", {
+    id: "ov-loop", d: "M380,66 C380,18 230,18 230,66",
+    fill: "none", stroke: "#3a4358", "stroke-width": 2,
+    "stroke-dasharray": "7 5", opacity: 0,
+  }, ov);
+  el("text", { id: "ov-loop-label", x: 305, y: 26, "text-anchor": "middle",
+               fill: "#8a94a8", "font-size": 12, opacity: 0 }, ov);
+  for (const n of OV_NODES) {
+    const g = el("g", { class: "ov-node", id: "ov-" + n.key }, ov);
+    el("rect", { x: n.x - 48, y: 68, width: 96, height: 48, rx: 10 }, g);
+    el("text", { x: n.x, y: 97 }, g).textContent = n.label;
+    ovState[n.key] = "pending";
+  }
+}
+
+/* ================= 轨迹图：按时间生长，退回画彩色回边 ================= */
+const trace = document.getElementById("trace");
+const TR_COLS = { plan: 90, code: 250, review: 410, verify: 540, end: 660 };
+let trPrev = null;      // 上一个节点 {x,y}
+let trRow = 0;
+
+function trAddNode(colKey, label, sub, opts = {}) {
+  const x = TR_COLS[colKey];
+  const y = 46 + trRow * 66;
+  trRow++;
+  const g = el("g", { class: "tr-node" + (opts.end ? " " + opts.end : "") }, trace);
+  el("rect", { x: x - 55, y: y - 20, width: 110, height: 42, rx: 9 }, g);
+  el("text", { x: x, y: y - 2 }, g).textContent = label;
+  if (sub) el("text", { class: "sub", x: x, y: y + 14 }, g).textContent = sub;
+
+  if (trPrev) {
+    const from = trPrev, to = { x, y };
+    let mid;
+    if (opts.back) {
+      // 退回回边：从上个节点弯回编码列，颜色=循环轮次
+      const c = roundColor(opts.back);
+      const d = `M${from.x},${from.y + 21} C${from.x},${(from.y + to.y) / 2} ` +
+                `${to.x},${(from.y + to.y) / 2} ${to.x},${to.y - 22}`;
+      el("path", { d, class: "tr-edge back", stroke: c }, trace);
+      mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+      const lb = el("text", { class: "tr-label", x: mid.x, y: mid.y - 6, fill: c }, trace);
+      lb.textContent = "退回 #" + opts.back;
+    } else {
+      el("line", { x1: from.x, y1: from.y + 21, x2: to.x, y2: to.y - 22,
+                   class: "tr-edge" }, trace);
+      if (opts.edgeLabel) {
+        mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+        const lb = el("text", { class: "tr-label", x: mid.x, y: mid.y - 6,
+                                fill: "#8a94a8" }, trace);
+        lb.textContent = opts.edgeLabel;
+      }
+    }
+  }
+  trPrev = { x, y };
+  trace.setAttribute("viewBox", `0 0 720 ${Math.max(460, y + 70)}`);
+}
+
+/* ================= 事件驱动 ================= */
+const FAIL_STAGE = { "调度": "plan", "编码": "code", "评审": "review", "交付核验": "verify" };
+const statusEl = document.getElementById("status");
+
+function applyEvent(e) {
+  statusEl.textContent = `#${e.seq} ${e.event}` +
+    (e.task_id ? ` · ${e.task_id}` : "");
+  switch (e.event) {
+    case "plan":
+      ovSet("plan", "done");
+      trAddNode("plan", "调度拆解", `${e.tasks.length} 个任务`);
+      break;
+    case "task_start":
+      ovSet("code", "active");
+      trAddNode("code", "编码 " + e.task_id, e.role);
+      break;
+    case "dispatch":
+      ovSet("code", "active");
+      break;                       // 轨迹节点已在 task_start 落过（退回后的重派不新增）
+    case "review":
+      ovSet("review", "active");
+      trAddNode("review", "评审 " + e.task_id, e.role);
+      break;
+    case "verdict":
+      if (e.verdict === "通过") {
+        ovSet("review", "done");
+        ovSet("verify", "active");
+      } else {
+        ovSet("review", "done");
+      }
+      break;
+    case "reject":
+      ovSet("code", "active");
+      ovLoop(e.round);
+      trAddNode("code", "编码 " + e.task_id, "第 " + e.round + " 次修改", { back: e.round });
+      break;
+    case "truncation_recover":
+      trAddNode("review", "截断补发", e.task_id);
+      break;
+    case "verified":
+      ovSet("verify", "done");
+      trAddNode("verify", "交付核验", (e.declared || []).length + " 个文件");
+      break;
+    case "done":
+      ovSet("done", "done");
+      trAddNode("end", "✓ 完成", `${e.task_id} · 退回 ${e.rejects} 次`, { end: "end-ok" });
+      break;
+    case "direct_reply":
+      statusEl.textContent = "调度岗：" + e.answer;
+      trAddNode("end", "直接回复", (e.answer || "").slice(0, 20), { end: "end-ok" });
+      break;
+    case "fail": {
+      const stage = FAIL_STAGE[e.stage] || "done";
+      ovSet(stage, "fail");
+      ovSet("done", "fail");
+      trAddNode("end", "✗ 失败", (e.reason || "").slice(0, 24), { end: "end-bad" });
+      break;
+    }
+  }
+}
+
+/* ================= 录播回放 ================= */
+let replayTimer = null;
+
+function resetCharts() {
+  if (ovMode === "mermaid") {
+    document.querySelectorAll("#ov-mermaid svg g.node")
+      .forEach(n => n.classList.remove("lit-active", "lit-done", "lit-fail"));
+    ovLit = [];
+  } else {
+    for (const n of OV_NODES) ovSet(n.key, "pending");
+    document.getElementById("ov-loop").setAttribute("opacity", 0);
+    document.getElementById("ov-loop-label").setAttribute("opacity", 0);
+  }
+  trace.innerHTML = "";
+  trPrev = null;
+  trRow = 0;
+}
+
+async function playReplay() {
+  clearTimeout(replayTimer);
+  resetCharts();
+  const file = document.getElementById("replaySel").value;
+  statusEl.textContent = "加载 " + file + " ……";
+  let events;
+  try {
+    const text = await (await fetch(file)).text();
+    events = text.trim().split("\n").map(l => JSON.parse(l));
+  } catch (err) {
+    statusEl.textContent = "录播加载失败：" + err.message;
+    return;
+  }
+  let i = 0;
+  const step = () => {
+    if (i >= events.length) { statusEl.textContent = "回放完毕"; return; }
+    applyEvent(events[i++]);
+    replayTimer = setTimeout(step, 750);
+  };
+  step();
+}
+document.getElementById("btnReplay").addEventListener("click", playReplay);
+
+/* ================= 直播模式：FastAPI 在就解锁输入框，与终端同一底层 ================= */
+async function startRun(requirement) {
+  const req = document.getElementById("req");
+  clearTimeout(replayTimer);            // 直播与录播互斥，防事件交错
+  resetCharts();
+  req.disabled = true;
+  statusEl.textContent = "运行中……";
+  try {
+    const res = await fetch("/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requirement }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const chunks = buf.split("\n\n");
+      buf = chunks.pop();
+      for (const c of chunks) {
+        const line = c.trim();
+        if (line.startsWith("data: ")) {
+          const e = JSON.parse(line.slice(6));
+          e.seq = e.seq || "-";
+          applyEvent(e);
+        }
+      }
+    }
+    statusEl.textContent = "运行结束";
+  } catch (err) {
+    statusEl.textContent = "运行失败：" + err.message;
+  } finally {
+    req.disabled = false;
+  }
+}
+
+async function initLive() {
+  const req = document.getElementById("req");
+  const cfg = document.getElementById("configEdit");
+  try {
+    const r = await fetch("/config");         // FastAPI 在位：直播模式
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    cfg.value = await r.text();
+    cfg.readOnly = false;                     // 直播模式：配置可编辑保存
+    req.disabled = false;
+    req.placeholder = "输入需求，回车运行";
+    req.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && req.value.trim()) startRun(req.value.trim());
+    });
+    statusEl.textContent = "直播模式就绪（与终端同一调度入口）";
+    return true;
+  } catch {
+    fetch("/run_config.txt")                   // 纯静态服务：退回读配置文件（只读）
+      .then(r => r.ok ? r.text() : Promise.reject(new Error(r.status)))
+      .then(t => { cfg.value = t; })
+      .catch(() => {
+        cfg.value = "（未加载到配置——FastAPI 启动：python -m uvicorn web_server:app --port 8000）";
+      });
+    return false;
+  }
+}
+
+/* ================= 汉堡抽屉：开合 + 配置保存 ================= */
+const drawer = document.getElementById("drawer");
+const mask = document.getElementById("mask");
+document.getElementById("hamburger").addEventListener("click", () => {
+  drawer.classList.add("open");
+  mask.classList.add("open");
+});
+mask.addEventListener("click", () => {
+  drawer.classList.remove("open");
+  mask.classList.remove("open");
+});
+document.getElementById("btnSaveCfg").addEventListener("click", async () => {
+  const hint = document.getElementById("cfgHint");
+  if (document.getElementById("configEdit").readOnly) {
+    hint.textContent = "静态服务模式不支持保存（需 FastAPI 启动）";
+    return;
+  }
+  try {
+    const res = await fetch("/config", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      body: document.getElementById("configEdit").value,
+    });
+    const msg = (await res.text()).trim();
+    hint.textContent = res.ok ? msg : ("保存失败：" + msg);
+  } catch (err) {
+    hint.textContent = "保存失败：" + err.message;
+  }
+});
+
+/* ================= 总览图缩放：按钮 + 滚轮 ================= */
+let ovScale = 1;
+const OV_SCALE_MIN = 0.5, OV_SCALE_MAX = 3.5;
+function applyOvZoom() {
+  ovScale = Math.min(OV_SCALE_MAX, Math.max(OV_SCALE_MIN, ovScale));
+  document.getElementById("ov-mermaid").style.transform = `scale(${ovScale})`;
+  document.getElementById("ovScaleVal").textContent = Math.round(ovScale * 100) + "%";
+}
+document.getElementById("ovIn").addEventListener("click", () => { ovScale *= 1.2; applyOvZoom(); });
+document.getElementById("ovOut").addEventListener("click", () => { ovScale /= 1.2; applyOvZoom(); });
+document.getElementById("ovReset").addEventListener("click", () => { ovScale = 1; applyOvZoom(); });
+document.getElementById("ov-zoom").addEventListener("wheel", (e) => {
+  e.preventDefault();
+  ovScale *= e.deltaY < 0 ? 1.12 : 0.9;
+  applyOvZoom();
+}, { passive: false });
+
+/* 直播模式不自动播录播（避免 /replay.jsonl 404 噪音）；静态模式自动播 */
+initLive().then((live) => {
+  initOverview().then(() => { if (!live) playReplay(); });
+});
+</script>
+</body>
+</html>

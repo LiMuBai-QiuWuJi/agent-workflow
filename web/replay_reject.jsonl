@@ -1,0 +1,15 @@
+{"seq": 1, "event": "plan", "tasks": [{"id": "任务#1", "role": "coder", "desc": "实现斐波那契数列函数", "review_of": null, "deliverable": "fib.py", "depends_on": []}, {"id": "任务#2", "role": "tester", "desc": "评审 fib.py 的正确性与边界处理", "review_of": "任务#1", "deliverable": "", "depends_on": [1]}]}
+{"seq": 2, "event": "task_start", "task_id": "任务#1", "role": "coder", "has_review": true}
+{"seq": 3, "event": "dispatch", "task_id": "任务#1", "role": "coder"}
+{"seq": 4, "event": "review", "task_id": "任务#2", "for_task": "任务#1", "role": "tester"}
+{"seq": 5, "event": "verdict", "task_id": "任务#1", "verdict": "不通过"}
+{"seq": 6, "event": "reject", "task_id": "任务#1", "round": 1}
+{"seq": 7, "event": "dispatch", "task_id": "任务#1", "role": "coder"}
+{"seq": 8, "event": "review", "task_id": "任务#2", "for_task": "任务#1", "role": "tester"}
+{"seq": 9, "event": "verdict", "task_id": "任务#1", "verdict": "不通过"}
+{"seq": 10, "event": "reject", "task_id": "任务#1", "round": 2}
+{"seq": 11, "event": "dispatch", "task_id": "任务#1", "role": "coder"}
+{"seq": 12, "event": "review", "task_id": "任务#2", "for_task": "任务#1", "role": "tester"}
+{"seq": 13, "event": "verdict", "task_id": "任务#1", "verdict": "通过"}
+{"seq": 14, "event": "verified", "task_id": "任务#1", "declared": ["fib.py"]}
+{"seq": 15, "event": "done", "task_id": "任务#1", "rejects": 2, "declared": ["fib.py"]}
