@@ -71,6 +71,8 @@ class CallParameters:
     tools: list[dict] = field(default_factory=list)
     tool_choice: str = "auto"
     tool_map: dict[str, Callable] = field(default_factory=dict)
+    max_tool_rounds: int = 15
+    """工具调用轮数上限：超限后回灌"轮数用尽"提示并强制模型收尾，假完成交给交付核验兜"""
 
     context_mode: str = "none"
     """none | recent | unlimited  —— 无历史 | 最近 N 轮 | 无限上下文"""
@@ -143,6 +145,7 @@ class ChatSession:
 def _extract_stream(response: Stream[ChatCompletionChunk]) -> tuple[dict, bool]:
     assistant_content = ""
     accumulated_tool_calls = {}
+    finish_reason = None
 
     for chunk in response:
         delta = chunk.choices[0].delta
@@ -167,7 +170,13 @@ def _extract_stream(response: Stream[ChatCompletionChunk]) -> tuple[dict, bool]:
                         accumulated_tool_calls[idx]["function"]["arguments"] += tc.function.arguments
 
         if chunk.choices[0].finish_reason is not None:
+            finish_reason = chunk.choices[0].finish_reason
             break
+
+    if finish_reason == "length":
+        # 截断感知：finish_reason=="length" = 被 max_tokens 掐断，不是"模型没话说"
+        assistant_content += "（输出被 max_tokens 截断）"
+        print("（输出被 max_tokens 截断）")
 
     msg_dict = {"role": "assistant", "content": assistant_content}
     has_tools = len(accumulated_tool_calls) > 0
@@ -187,6 +196,9 @@ def _extract_nonstream(response: ChatCompletion) -> tuple[dict, bool]:
             })
     msg = response.choices[0].message
     msg_dict = msg.model_dump(exclude_none=True)
+    if response.choices[0].finish_reason == "length":
+        # 截断感知：被 max_tokens 掐断时打标记，让调度层区分"没话说"与"被掐断"
+        msg_dict["content"] = (msg_dict.get("content") or "") + "（输出被 max_tokens 截断）"
     has_tools = msg.tool_calls is not None and len(msg.tool_calls) > 0
     if has_tools:
         print(f"DeepSeek: [调用工具 {len(msg.tool_calls)} 个]")
@@ -204,28 +216,32 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
     session.add_user(parameters.user_input)
     final_reply = ""
 
+    def _request_once() -> tuple[dict, bool]:
+        """发一次聊天请求并统一抽取结果（流式/非流式共用出口）。"""
+        msgs = session.get_messages_for_request(parameters)
+        response = client.chat.completions.create(
+            model=parameters.model,
+            messages=msgs,
+            max_tokens=parameters.max_tokens,
+            temperature=parameters.temperature,
+            timeout=parameters.timeout,
+            stream=parameters.stream,
+            tools=parameters.tools,
+            tool_choice=parameters.tool_choice,
+        )
+        if parameters.stream:
+            print("DeepSeek: ", end="", flush=True)
+            msg_dict, has_tools = _extract_stream(response)
+            print()
+        else:
+            msg_dict, has_tools = _extract_nonstream(response)
+        return msg_dict, has_tools
+
     for attempt in range(parameters.retries):
         try:
+            tool_rounds = 0
             while True:
-                msgs = session.get_messages_for_request(parameters)
-
-                response = client.chat.completions.create(
-                    model=parameters.model,
-                    messages=msgs,
-                    max_tokens=parameters.max_tokens,
-                    temperature=parameters.temperature,
-                    timeout=parameters.timeout,
-                    stream=parameters.stream,
-                    tools=parameters.tools,
-                    tool_choice=parameters.tool_choice,
-                )
-
-                if parameters.stream:
-                    print("DeepSeek: ", end="", flush=True)
-                    msg_dict, has_tools = _extract_stream(response)
-                    print()
-                else:
-                    msg_dict, has_tools = _extract_nonstream(response)
+                msg_dict, has_tools = _request_once()
 
                 session.add_assistant(msg_dict=msg_dict)
 
@@ -259,6 +275,19 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
                         tool_call_id=tc["id"],
                         content=tool_content,
                     )
+
+                tool_rounds += 1
+                if tool_rounds >= parameters.max_tool_rounds:
+                    # 工具轮数上限：回灌收尾提示，逼模型用剩余预算给结论；
+                    # 若仍假装调工具/不给结论，交付核验会判假完成
+                    session.add_user(
+                        f"系统提示：工具调用已达 {parameters.max_tool_rounds} 轮上限。"
+                        "请停止调用工具，基于已获得的结果立即给出最终结论。"
+                    )
+                    final_dict, _ = _request_once()
+                    session.add_assistant(msg_dict=final_dict)
+                    final_reply = final_dict.get("content", "") or "（工具轮数用尽，模型未给出文字结论）"
+                    break
 
             return final_reply
 
