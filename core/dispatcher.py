@@ -8,8 +8,10 @@ from core.team import Team
 from core.task_table import Task, TaskTableError, parse_task_table
 from core.verifier import verify_delivery
 
-COLLAB_RE = re.compile(r"\[请求协作:([A-Za-z_\-]+)\]")
-"""输出契约信号：[请求协作:岗位key] 协作说明"""
+COLLAB_RE = re.compile(r"[\[【]请求协作[:：]\s*([A-Za-z_\-]+)\s*[\]】]")
+"""输出契约信号：[请求协作:岗位key] 协作说明。
+全半角括号（[]/【】）与全半角冒号（:/：）均容忍——模型标点风格漂移不该卡死评审链。
+与 VERDICT_RE 的宽容度保持一致。"""
 
 VERDICT_RE = re.compile(r"【评审结论[:：](通过|不通过)】")
 """输出契约信号："""
@@ -177,7 +179,8 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
             print("（编码岗未发协作信号——无法进入评审，终止；完整现场见上方产出）")
             if events is not None:
                 events.append({"event": "fail", "task_id": task_id,
-                               "stage": "编码", "reason": "未发协作信号"})
+                               "stage": "编码", "reason": "未发协作信号",
+                               "raw": coder_reply[-2000:]})
             return None
         role_key, note = collab_req
         role = team.get(role_key)   # 岗位不存在会显式报错并列出现有岗位（Team.get 自带）
