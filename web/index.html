@@ -4,57 +4,140 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>多 Agent 团队编排 · 运行视图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f1420; --panel: #171e2e; --border: #2a3348;
-    --text: #dbe2ee; --muted: #8a94a8;
-    --active: #3b82f6; --done: #22c55e; --fail: #ef4444; --pending: #3a4358;
+    --bg: #070a11;
+    --panel: rgba(255, 255, 255, 0.028);
+    --panel-solid: #10141f;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text: #e6eaf2;
+    --muted: #8b93a7;
+    --active: #3b82f6;
+    --done: #22c55e;
+    --fail: #ef4444;
+    --pending: #39415a;
+    --font-latin: "Space Grotesk", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
-  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px;
-           background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .title { font-size: 16px; font-weight: 600; white-space: nowrap; }
-  .runbar { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 320px; }
-  #req { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border);
-         background: #101728; color: var(--text); font-size: 14px; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+  /* 环境背景：深层径向辉光 + 细网格，避免平涂 */
+  .ambient {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(52rem 34rem at 82% -8%, rgba(59, 130, 246, 0.14), transparent 62%),
+      radial-gradient(44rem 30rem at 8% 22%, rgba(168, 85, 247, 0.09), transparent 60%),
+      radial-gradient(40rem 26rem at 55% 108%, rgba(34, 197, 94, 0.06), transparent 62%),
+      var(--bg);
+  }
+  .ambient::after {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, #000 30%, transparent 75%);
+  }
+  main { overflow-x: hidden; width: 100%; max-width: 100%; }
+
+  /* ===== 悬浮玻璃胶囊导航 ===== */
+  .nav-pill {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    z-index: 60; display: flex; align-items: center; gap: 18px;
+    padding: 10px 12px 10px 22px; border-radius: 999px;
+    background: rgba(13, 17, 27, 0.72);
+    border: 1px solid var(--border-strong);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-latin); font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pending); transition: background .3s, box-shadow .3s; }
+  .brand.live .dot { background: var(--done); box-shadow: 0 0 10px rgba(34, 197, 94, 0.8); }
+  #status { font-size: 12px; color: var(--muted); max-width: 38vw; overflow: hidden; text-overflow: ellipsis; }
+  #hamburger {
+    font-size: 16px; line-height: 1; padding: 8px 14px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid var(--border);
+    cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  #hamburger:hover { border-color: var(--active); background: rgba(59,130,246,0.12); }
+
+  /* ===== Hero：居中控车指令台（宽排印，H1 至多两行） ===== */
+  .hero {
+    padding: 140px 24px 56px; text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .hero h1 {
+    margin: 0; max-width: 52rem; width: 100%;
+    font-family: var(--font-latin);
+    font-size: clamp(2rem, 4.4vw, 3.4rem);
+    line-height: 1.18; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(180deg, #ffffff 30%, #9fb0cc 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub {
+    margin: 18px 0 0; max-width: 44rem;
+    color: var(--muted); font-size: 15px; line-height: 1.8;
+  }
+  /* 指令台：唯一的行动入口 */
+  .console {
+    margin-top: 40px; width: min(46rem, 92vw);
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 8px 8px 22px; border-radius: 18px;
+    background: rgba(16, 20, 31, 0.85);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    transition: box-shadow .3s, border-color .3s;
+  }
+  .console:focus-within {
+    border-color: rgba(59, 130, 246, 0.65);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.14), 0 18px 50px rgba(0,0,0,0.4);
+  }
+  .console .prompt { color: var(--active); font-family: var(--font-latin); font-weight: 700; font-size: 18px; user-select: none; }
+  #req {
+    flex: 1; min-width: 0; padding: 12px 0; border: 0; outline: 0; background: transparent;
+    color: var(--text); font-size: 15px; font-family: inherit;
+  }
   #req:disabled { color: var(--muted); }
-  select, button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
-         background: #101728; color: var(--text); font-size: 13px; cursor: pointer; }
-  button:hover { border-color: var(--active); }
-  #status { font-size: 12px; color: var(--muted); white-space: nowrap; }
-  main { display: block; padding: 14px 20px; max-width: 1100px; margin: 0 auto; }
-  .chart-card { background: var(--panel); border: 1px solid var(--border);
-                border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; }
-  .chart-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  #req::placeholder { color: #5b6478; }
+
+  /* ===== Bento 工作区：无缝网格，双卡交错，零空位 ===== */
+  .workspace {
+    display: grid; grid-template-columns: repeat(12, 1fr);
+    grid-auto-flow: dense; gap: 18px;
+    width: min(76rem, 94vw); margin: 0 auto;
+    padding: 24px 0 96px;
+  }
+  .chart-card {
+    grid-column: span 12;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 18px; padding: 18px 20px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    transition: transform .5s cubic-bezier(.2,.7,.2,1), border-color .3s, box-shadow .3s;
+  }
+  .chart-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255,255,255,0.16);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+  }
+  .chart-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chart-title { font-size: 15px; font-weight: 600; font-family: var(--font-latin); letter-spacing: 0.01em; }
+  .chart-hint { font-size: 12px; color: var(--muted); }
   svg { width: 100%; height: auto; display: block; }
-  /* 汉堡抽屉：配置编辑 + 演示回放都收进右上角菜单 */
-  #hamburger { font-size: 17px; line-height: 1; padding: 7px 12px; }
-  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.45);
-          opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 40; }
-  .mask.open { opacity: 1; pointer-events: auto; }
-  aside.drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 400px;
-                 max-width: 94vw; background: var(--panel); border-left: 1px solid var(--border);
-                 z-index: 50; transform: translateX(102%);
-                 transition: transform .25s ease-out; padding: 16px 18px; overflow-y: auto; }
-  aside.drawer.open { transform: translateX(0); }
-  aside.drawer .sec-title { font-size: 13px; color: var(--muted); margin: 20px 0 8px; }
-  aside.drawer .sec-title:first-child { margin-top: 0; }
-  #configEdit { width: 100%; min-height: 340px; background: #101728; color: var(--text);
-                border: 1px solid var(--border); border-radius: 8px; padding: 10px;
-                font-family: Consolas, monospace; font-size: 12px; line-height: 1.6;
-                resize: vertical; }
-  #configEdit[readonly] { color: var(--muted); }
-  #cfgRow { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
-  #cfgHint { font-size: 11px; color: var(--muted); }
-  #replayRow { display: flex; gap: 8px; }
-  #replayRow select { flex: 1; }
   /* 总览节点状态 */
   .ov-node rect { fill: #1c2436; stroke: var(--pending); stroke-width: 1.5; transition: all .3s; }
   .ov-node text { fill: var(--muted); font-size: 14px; text-anchor: middle; transition: fill .3s; }
-  .ov-node.active rect { fill: #12315e; stroke: var(--active);
-        filter: drop-shadow(0 0 6px rgba(59,130,246,.7)); }
+  .ov-node.active rect { fill: #12315e; stroke: var(--active); filter: drop-shadow(0 0 6px rgba(59,130,246,.7)); }
   .ov-node.active text { fill: #fff; }
   .ov-node.done rect { fill: #0f2e1c; stroke: var(--done); }
   .ov-node.done text { fill: var(--done); }
@@ -70,40 +153,173 @@
   .tr-edge.back { stroke-width: 2; stroke-dasharray: 6 4; }
   .tr-label { font-size: 11px; text-anchor: middle; }
   /* Mermaid 总览图：实时亮灯态 */
-  .ov-tools { float: right; display: flex; gap: 6px; align-items: center; }
-  .ov-tools button { padding: 1px 10px; font-size: 13px; line-height: 1.5; }
+  .ov-tools { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .ov-tools button {
+    padding: 2px 12px; font-size: 13px; line-height: 1.6; border-radius: 8px;
+    background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border);
+    cursor: pointer; transition: border-color .2s;
+  }
+  .ov-tools button:hover { border-color: var(--active); }
   .ov-tools .hint { font-size: 11px; color: var(--muted); }
-  #ov-zoom { overflow: auto; max-height: 64vh; border-radius: 8px; }
-  #ov-mermaid { transform-origin: 0 0; transition: transform .12s ease-out;
-                display: inline-block; min-width: 100%; }
+  #ov-zoom { overflow: auto; max-height: 62vh; border-radius: 12px; }
+  #ov-mermaid { transform-origin: 0 0; transition: transform .12s ease-out; display: inline-block; min-width: 100%; }
   #ov-mermaid svg { max-width: none !important; width: 100%; height: auto; display: block; }
   g.node rect, g.node polygon { transition: stroke .3s; }
   g.node.lit-active rect, g.node.lit-active polygon {
     stroke: var(--active) !important; stroke-width: 3px !important;
-    filter: drop-shadow(0 0 8px rgba(59,130,246,.8)); }
+    filter: drop-shadow(0 0 8px rgba(59,130,246,.8));
+    animation: litPulse 1.4s ease-in-out infinite;
+  }
   g.node.lit-done rect, g.node.lit-done polygon {
     stroke: var(--done) !important; stroke-width: 3px !important; }
   g.node.lit-fail rect, g.node.lit-fail polygon {
     stroke: var(--fail) !important; stroke-width: 3px !important;
     filter: drop-shadow(0 0 8px rgba(239,68,68,.8)); }
+  @keyframes litPulse {
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(59,130,246,.7)); }
+    50%      { filter: drop-shadow(0 0 14px rgba(59,130,246,1)); }
+  }
+  /* 汉堡抽屉：配置编辑 + 演示回放都收进右上角菜单 */
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.55);
+          opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 70; }
+  .mask.open { opacity: 1; pointer-events: auto; }
+  aside.drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 400px;
+                 max-width: 94vw; background: var(--panel-solid); border-left: 1px solid var(--border-strong);
+                 z-index: 80; transform: translateX(102%);
+                 transition: transform .25s ease-out; padding: 20px 22px; overflow-y: auto; }
+  aside.drawer.open { transform: translateX(0); }
+  aside.drawer .sec-title { font-size: 13px; color: var(--muted); margin: 22px 0 8px; }
+  aside.drawer .sec-title:first-child { margin-top: 0; }
+  #configEdit { width: 100%; min-height: 340px; background: #0b0f18; color: var(--text);
+                border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+                font-family: Consolas, monospace; font-size: 12px; line-height: 1.6;
+                resize: vertical; }
+  #configEdit[readonly] { color: var(--muted); }
+  #cfgRow { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  #cfgHint { font-size: 11px; color: var(--muted); }
+  #replayRow { display: flex; gap: 8px; }
+  #replayRow select { flex: 1; }
+  button.act {
+    padding: 9px 18px; border-radius: 10px; border: 1px solid var(--border-strong);
+    background: rgba(59, 130, 246, 0.16); color: #cfe0ff; font-size: 13px; cursor: pointer;
+    transition: background .2s, border-color .2s;
+  }
+  button.act:hover { background: rgba(59, 130, 246, 0.3); border-color: var(--active); }
+  select, button.ghost { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+         background: #0b0f18; color: var(--text); font-size: 13px; cursor: pointer; }
+  select:hover, button.ghost:hover { border-color: var(--active); }
+  /* 底部行动条 */
+  .foot {
+    width: min(76rem, 94vw); margin: 0 auto; padding: 0 0 48px;
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    color: var(--muted); font-size: 12px;
+  }
+  /* 入场动画（GSAP 在时交给 GSAP，不在时走 CSS 兜底） */
+  .rise { opacity: 0; transform: translateY(18px); }
+  .rise.in { opacity: 1; transform: none; transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
+
+  /* ===== 结果弹窗：产出说明 / 失败说明 ===== */
+  #resultMask {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(4, 6, 10, 0.6);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+  }
+  #resultMask.open { opacity: 1; pointer-events: auto; }
+  #resultCard {
+    width: min(42rem, 94vw); max-height: 84vh; overflow-y: auto;
+    background: linear-gradient(180deg, #131824 0%, #0d1119 100%);
+    border-radius: 20px; padding: 28px 30px 24px;
+    position: relative;
+    box-shadow: 0 40px 120px rgba(0,0,0,0.6);
+    transform: translateY(26px) scale(0.94); opacity: 0;
+  }
+  #resultMask.open #resultCard {
+    transform: none; opacity: 1;
+    transition: transform .45s cubic-bezier(.16, 1.2, 0.3, 1), opacity .3s ease;
+  }
+  #resultCard.ok { border: 1px solid rgba(34, 197, 94, 0.35); box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 60px rgba(34,197,94,.10); }
+  #resultCard.bad { border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 60px rgba(239,68,68,.12); }
+  #resultClose {
+    position: absolute; top: 14px; right: 14px;
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+    color: var(--muted); font-size: 15px; cursor: pointer; line-height: 1;
+    transition: color .2s, border-color .2s;
+  }
+  #resultClose:hover { color: var(--text); border-color: var(--border-strong); }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    padding: 5px 14px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .badge .b-dot { width: 7px; height: 7px; border-radius: 50%; }
+  #resultCard.ok .badge { color: #7ee2a8; background: rgba(34,197,94,.10); border: 1px solid rgba(34,197,94,.3); }
+  #resultCard.ok .badge .b-dot { background: var(--done); box-shadow: 0 0 8px rgba(34,197,94,.9); }
+  #resultCard.bad .badge { color: #f3a6ab; background: rgba(239,68,68,.10); border: 1px solid rgba(239,68,68,.35); }
+  #resultCard.bad .badge .b-dot { background: var(--fail); box-shadow: 0 0 8px rgba(239,68,68,.9); }
+  #resultCard.direct { border: 1px solid rgba(59, 130, 246, 0.4); box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 60px rgba(59,130,246,.12); }
+  #resultCard.direct .badge { color: #9ec2ff; background: rgba(59,130,246,.10); border: 1px solid rgba(59,130,246,.35); }
+  #resultCard.direct .badge .b-dot { background: var(--active); box-shadow: 0 0 8px rgba(59,130,246,.9); }
+  .direct-answer { font-size: 14px; line-height: 2; color: #c9d4e6; margin: 0; white-space: pre-wrap; word-break: break-word; }
+  #resultTitle { margin: 0 0 6px; font-size: 20px; font-weight: 700; font-family: var(--font-latin); letter-spacing: 0.01em; }
+  #resultSummary { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .file-entry {
+    display: grid; grid-template-columns: 4px 1fr; gap: 14px;
+    padding: 14px 0; border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .file-entry .bar { width: 4px; border-radius: 4px; background: linear-gradient(180deg, var(--active), rgba(59,130,246,.25)); }
+  .file-entry .fname { font-size: 15px; font-weight: 600; font-family: var(--font-latin); }
+  .file-entry .fpath { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); margin: 3px 0 8px; word-break: break-all; }
+  .file-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ftag { font-size: 11px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: #c6cede; background: rgba(255,255,255,0.04); }
+  .ftag.core { color: #9ec2ff; border-color: rgba(59,130,246,.45); background: rgba(59,130,246,.10); }
+  .fuse { margin-top: 8px; font-size: 12px; color: #9aa5ba; line-height: 1.7; }
+  .fuse b { color: #c9d4e6; font-weight: 600; }
+  .fail-reason {
+    margin: 4px 0 12px; padding: 14px 16px; border-radius: 12px;
+    background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.25);
+    color: #f0c4c7; font-size: 13px; line-height: 1.8;
+  }
+  .fail-advice { font-size: 13px; color: #9aa5ba; line-height: 1.8; margin: 0 0 12px; }
+  .fail-advice b { color: #c9d4e6; }
+  #resultRaw summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  #resultRaw pre {
+    margin: 0; padding: 14px; border-radius: 12px; overflow-x: auto;
+    background: #090c13; border: 1px solid var(--border);
+    font-size: 11px; line-height: 1.7; color: #97a2b8; white-space: pre-wrap; word-break: break-all;
+  }
+  #resultFoot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"
+        onerror="window.__gsapFailed=true"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"
         onerror="window.__mermaidFailed=true"></script>
 </head>
 <body>
-<header>
-  <div class="title">多 Agent 团队编排 · 运行视图</div>
-  <div class="runbar">
-    <input id="req" placeholder="输入需求，回车运行（FastAPI+SSE 接入后开放）" disabled>
-    <span id="status">就绪</span>
-  </div>
-  <button id="hamburger" title="菜单：配置 / 演示回放">☰</button>
-</header>
+<div class="ambient"></div>
 <main>
-  <section class="charts">
-    <div class="chart-card">
-      <div class="chart-title">
-        总览 · 事实流程（当前阶段亮灯，与 08-流程图记录 图一同源）
+  <nav class="nav-pill rise" id="navPill">
+    <span class="brand" id="brand"><span class="dot"></span>Agent Workflow<span style="color:var(--muted);font-weight:400">· 运行视图</span></span>
+    <span id="status">就绪</span>
+    <button id="hamburger" title="配置与演示回放">☰</button>
+  </nav>
+
+  <section class="hero">
+    <h1 class="rise">多 Agent 团队编排<br>实时运行视图</h1>
+    <p class="sub rise">一句需求进入调度岗，拆解、派发、评审、核验全链路在两张图上实时生长。<br>浏览器与终端共用同一调度入口，事件流即真相。</p>
+    <div class="console rise">
+      <span class="prompt">&gt;_</span>
+      <input id="req" placeholder="输入需求，回车运行（FastAPI+SSE 接入后开放）" disabled>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <div class="chart-card rise">
+      <div class="chart-head">
+        <span class="chart-title">编排全景</span>
+        <span class="chart-hint">当前阶段亮灯，与工程档案流程图同源同图例</span>
         <span class="ov-tools">
           <button id="ovOut" title="缩小">－</button>
           <button id="ovReset" title="复位">1:1</button>
@@ -115,18 +331,26 @@
       <div id="ov-zoom"><div id="ov-mermaid"></div></div>
       <svg id="overview" viewBox="0 0 720 170" style="display:none"></svg>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">轨迹 · 本次运行走过的路径（退回带循环编号与颜色）</div>
+    <div class="chart-card rise">
+      <div class="chart-head">
+        <span class="chart-title">运行轨迹</span>
+        <span class="chart-hint">本次运行走过的路径，退回带循环编号与颜色回边</span>
+      </div>
       <svg id="trace" viewBox="0 0 720 460"></svg>
     </div>
   </section>
+
+  <footer class="foot rise">
+    <span>调度蓝 · 岗位琥珀 · 核验紫 · 失败红 · 闭环绿</span>
+    <span>直播与终端同一底层 · 录播仅演示用</span>
+  </footer>
 </main>
 <div id="mask" class="mask"></div>
 <aside id="drawer" class="drawer">
   <div class="sec-title">运行配置（run_config.txt，可编辑）</div>
   <textarea id="configEdit" readonly>加载中……</textarea>
   <div id="cfgRow">
-    <button id="btnSaveCfg">保存配置</button>
+    <button id="btnSaveCfg" class="act">保存配置</button>
     <span id="cfgHint">保存后需重启服务生效</span>
   </div>
   <div class="sec-title">演示回放（录播，仅演示用）</div>
@@ -135,9 +359,19 @@
       <option value="replay.jsonl">真实运行（退回 0 次）</option>
       <option value="replay_reject.jsonl">含退回循环（退回 2 次）</option>
     </select>
-    <button id="btnReplay">▶ 重播</button>
+    <button id="btnReplay" class="act">重播</button>
   </div>
 </aside>
+<div id="resultMask">
+  <div id="resultCard" role="dialog" aria-modal="true">
+    <button id="resultClose" title="关闭">✕</button>
+    <div class="badge"><span class="b-dot"></span><span id="badgeText"></span></div>
+    <h2 id="resultTitle"></h2>
+    <p id="resultSummary"></p>
+    <div id="resultBody"></div>
+    <div id="resultFoot"><button id="resultOk" class="act">知道了</button></div>
+  </div>
+</div>
 <script>
 "use strict";
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -199,8 +433,8 @@ async function initOverview() {
       startOnLoad: false, securityLevel: "loose", theme: "base",
       flowchart: { curve: "basis", htmlLabels: true },
       themeVariables: {
-        background: "#171e2e", primaryColor: "#1c2436", primaryTextColor: "#dbe2ee",
-        primaryBorderColor: "#3a4358", lineColor: "#3a4358", edgeLabelBackground: "#171e2e",
+        background: "#10141f", primaryColor: "#1c2436", primaryTextColor: "#dbe2ee",
+        primaryBorderColor: "#3a4358", lineColor: "#3a4358", edgeLabelBackground: "#10141f",
         fontSize: "13px",
       },
     });
@@ -334,11 +568,124 @@ function trAddNode(colKey, label, sub, opts = {}) {
 const FAIL_STAGE = { "调度": "plan", "编码": "code", "评审": "review", "交付核验": "verify" };
 const statusEl = document.getElementById("status");
 
+/* ================= 结果弹窗：产出说明 / 失败说明 ================= */
+let runTasks = [];            // 本次运行的任务表（plan 事件捕获，用于用途匹配）
+const resultMask = document.getElementById("resultMask");
+const resultCard = document.getElementById("resultCard");
+
+const basename = p => (p || "").split(/[\\/]/).pop();
+
+/* 阶段名 → 用户手册式人话（行业标准表述，无内部用语） */
+const STAGE_MANUAL = {
+  "调度":   { name: "需求拆解与任务分派", advice: "需求未能按约定格式拆成可执行的任务表。可调整需求表述、缩小范围后重试。" },
+  "编码":   { name: "开发执行",           advice: "执行岗位运行出错。查看下方原始现场定位原因；若是输出超长被截断，直接重试通常即可恢复。" },
+  "评审":   { name: "质量评审",           advice: "评审环节运行出错。查看下方原始现场；若是输出超长被截断，重试通常可恢复。" },
+  "交付核验": { name: "交付物核验",      advice: "声明的交付文件未在盘上找到，已按假完成拦截。建议缩小需求范围或换一种表述重试。" },
+  "系统":   { name: "系统运行",           advice: "发生未预期异常。查看下方原始现场，若反复出现请检查服务配置。" },
+};
+
+/* 扩展名 → 使用建议 */
+function usageHint(path) {
+  const name = basename(path);
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  if (/^test_.*\.py$|_test\.py$/.test(name)) return "评审用例，终端运行 <b>python -m pytest " + name + "</b> 执行";
+  if (ext === "py")    return "Python 模块，终端运行 <b>python " + name + "</b> 查看效果";
+  if (ext === "md")    return "Markdown 文档，用编辑器或浏览器直接打开阅读";
+  if (ext === "txt")   return "纯文本文件，直接打开阅读";
+  if (ext === "json" || ext === "jsonl") return "数据文件，供程序读取处理";
+  if (ext === "csv")   return "表格数据，可用 Excel 或直接以文本打开";
+  if (ext === "html")  return "网页文件，浏览器直接打开查看";
+  return "按项目目录结构使用";
+}
+
+/* 文件名 → 用途标签（命中任务表核心交付物 / 测试 / 附属） */
+function purposeOf(path) {
+  const name = basename(path);
+  const hit = runTasks.find(t => t.deliverable && basename(t.deliverable) === name);
+  if (hit) return { cls: "core", text: "核心交付物 · " + hit.id };
+  if (/^test_|_test\.|test\./.test(name)) return { cls: "", text: "评审用例" };
+  return { cls: "", text: "附属产出" };
+}
+
+function showResultDirect(e) {
+  document.getElementById("badgeText").textContent = "直接回复";
+  document.getElementById("resultTitle").textContent = "调度岗直接答复";
+  document.getElementById("resultSummary").textContent =
+    "该需求无需进入任务编排，调度岗已直接回答。如需落地实现，请描述具体的代码需求。";
+  const body = document.getElementById("resultBody");
+  body.innerHTML = '<p class="direct-answer"></p>';
+  body.querySelector(".direct-answer").textContent = e.answer || "（无内容）";
+  resultCard.className = "direct";
+  resultCard.id = "resultCard";
+  resultMask.classList.add("open");
+}
+
+function closeResult() {
+  resultMask.classList.remove("open");
+}
+
+function showResultOk(e) {
+  const files = e.declared || [];
+  const root = e.root || "";
+  document.getElementById("badgeText").textContent = "运行成功";
+  document.getElementById("resultTitle").textContent = "本次产出说明";
+  document.getElementById("resultSummary").textContent =
+    "闭环成功 · 退回 " + (e.rejects ?? 0) + " 次 · 核验通过 " + files.length + " 个文件。" +
+    (root
+      ? "以下文件已生成，路径为完整绝对路径，可直接在文件管理器中定位。"
+      : "以下文件已生成在项目工作区，路径相对项目根目录。");
+  const body = document.getElementById("resultBody");
+  body.innerHTML = "";
+  for (const p of files) {
+    const pur = purposeOf(p);
+    const absPath = root ? root + "\\" + p.replace(/\//g, "\\") : p;
+    const row = document.createElement("div");
+    row.className = "file-entry";
+    row.innerHTML =
+      '<span class="bar"></span><div>' +
+      '<div class="fname"></div>' +
+      '<div class="fpath"></div>' +
+      '<div class="file-tags"><span class="ftag ' + pur.cls + '"></span></div>' +
+      '<div class="fuse">' + usageHint(p) + "</div></div>";
+    row.querySelector(".fname").textContent = basename(p);
+    row.querySelector(".fpath").textContent = absPath;
+    row.querySelector(".fpath").title = absPath;
+    row.querySelector(".ftag").textContent = pur.text;
+    body.appendChild(row);
+  }
+  resultCard.className = "ok";
+  resultCard.id = "resultCard";
+  resultMask.classList.add("open");
+}
+
+function showResultFail(e) {
+  const st = STAGE_MANUAL[e.stage] || STAGE_MANUAL["系统"];
+  document.getElementById("badgeText").textContent = "运行失败";
+  document.getElementById("resultTitle").textContent = "失败说明 · " + st.name;
+  document.getElementById("resultSummary").textContent = "";
+  const body = document.getElementById("resultBody");
+  body.innerHTML =
+    '<div class="fail-reason"></div>' +
+    '<p class="fail-advice"><b>建议：</b>' + st.advice + "</p>" +
+    '<details id="resultRaw"><summary>查看原始现场</summary><pre></pre></details>';
+  body.querySelector(".fail-reason").textContent = e.reason || "未提供原因";
+  body.querySelector("#resultRaw pre").textContent = e.raw || "（无原始现场记录）";
+  resultCard.className = "bad";
+  resultCard.id = "resultCard";
+  resultMask.classList.add("open");
+}
+
+resultMask.addEventListener("click", (ev) => { if (ev.target === resultMask) closeResult(); });
+document.getElementById("resultClose").addEventListener("click", closeResult);
+document.getElementById("resultOk").addEventListener("click", closeResult);
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeResult(); });
+
 function applyEvent(e) {
   statusEl.textContent = `#${e.seq} ${e.event}` +
     (e.task_id ? ` · ${e.task_id}` : "");
   switch (e.event) {
     case "plan":
+      runTasks = e.tasks || [];
       ovSet("plan", "done");
       trAddNode("plan", "调度拆解", `${e.tasks.length} 个任务`);
       break;
@@ -376,16 +723,19 @@ function applyEvent(e) {
     case "done":
       ovSet("done", "done");
       trAddNode("end", "✓ 完成", `${e.task_id} · 退回 ${e.rejects} 次`, { end: "end-ok" });
+      showResultOk(e);
       break;
     case "direct_reply":
       statusEl.textContent = "调度岗：" + e.answer;
       trAddNode("end", "直接回复", (e.answer || "").slice(0, 20), { end: "end-ok" });
+      showResultDirect(e);
       break;
     case "fail": {
       const stage = FAIL_STAGE[e.stage] || "done";
       ovSet(stage, "fail");
       ovSet("done", "fail");
       trAddNode("end", "✗ 失败", (e.reason || "").slice(0, 24), { end: "end-bad" });
+      showResultFail(e);
       break;
     }
   }
@@ -395,6 +745,8 @@ function applyEvent(e) {
 let replayTimer = null;
 
 function resetCharts() {
+  closeResult();
+  runTasks = [];
   if (ovMode === "mermaid") {
     document.querySelectorAll("#ov-mermaid svg g.node")
       .forEach(n => n.classList.remove("lit-active", "lit-done", "lit-fail"));
@@ -482,6 +834,7 @@ async function initLive() {
     cfg.readOnly = false;                     // 直播模式：配置可编辑保存
     req.disabled = false;
     req.placeholder = "输入需求，回车运行";
+    document.getElementById("brand").classList.add("live");
     req.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter" && req.value.trim()) startRun(req.value.trim());
     });
@@ -545,7 +898,25 @@ document.getElementById("ov-zoom").addEventListener("wheel", (e) => {
   applyOvZoom();
 }, { passive: false });
 
+/* ================= 入场动画：GSAP 优先，CSS 兜底 ================= */
+function entrance() {
+  const items = document.querySelectorAll(".rise");
+  if (window.gsap && !window.__gsapFailed) {
+    gsap.to(items, {
+      opacity: 1, y: 0, duration: 0.7,
+      stagger: 0.09, ease: "power3.out", clearProps: "transform,opacity",
+      onComplete: () => items.forEach(n => n.classList.add("in")),
+    });
+  } else {
+    items.forEach((n, i) => {
+      n.style.transitionDelay = (i * 0.09) + "s";
+      n.classList.add("in");
+    });
+  }
+}
+
 /* 直播模式不自动播录播（避免 /replay.jsonl 404 噪音）；静态模式自动播 */
+entrance();
 initLive().then((live) => {
   initOverview().then(() => { if (!live) playReplay(); });
 });
