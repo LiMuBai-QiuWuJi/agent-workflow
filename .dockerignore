@@ -1,0 +1,27 @@
+# 虚拟环境：宿主专用，绝不进镜像
+.venv/
+venv/
+
+# Python 缓存
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# 运行产物：每次运行重新生成
+demo_out/
+运行记录/
+*.log
+
+# 版本控制与本地杂项
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# 凭证：ApiKeyPool 从 .env 或环境变量读取，镜像内绝不携带
+.env
+
+# 构建期临时
+Dockerfile
+.dockerignore

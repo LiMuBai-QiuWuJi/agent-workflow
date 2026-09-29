@@ -27,7 +27,10 @@ from main import apply_run_config, load_run_config
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "run_config.txt")
-WEB_PROJECT_ID = "web"          # 服务化运行的统一工程 id（工作区 demo_out/web/）
+WEB_PROJECT_ID = "web"
+"""服务化运行的默认工程 id（工作区 demo_out/web/）。
+可在 run_config.txt 用 project.id 覆盖（每次运行读取一次，无需重启），
+与终端模式 main.py 的 PROJECT_ID 对齐时记忆即共享。"""
 
 app = FastAPI(title="agent-workflow", docs_url=None, redoc_url=None)
 
@@ -40,6 +43,9 @@ class SSESink:
         self.q: queue.Queue = queue.Queue()
 
     def append(self, event: dict) -> None:
+        # 结局类事件带项目根绝对路径，前端产出说明可直接展示完整路径
+        if event.get("event") in ("done", "verified", "fail"):
+            event["root"] = PROJECT_ROOT
         self.items.append(event)
         self.q.put(event)
 
@@ -57,6 +63,7 @@ def _run_pipeline(sink: SSESink, requirement: str) -> None:
         apply_run_config(team, config)
         collab = config.get("dispatch.collab", "True").strip().lower() != "false"
         core_only = config.get("verify.core_only", "True").strip().lower() != "false"
+        project_id = (config.get("project.id", "") or "").strip() or WEB_PROJECT_ID
 
         try:
             tasks = plan_tasks(team, requirement, sink)
@@ -81,7 +88,7 @@ def _run_pipeline(sink: SSESink, requirement: str) -> None:
                        "depends_on": t.depends_on}
                       for t in tasks],
         })
-        run_pipeline(team, memory, WEB_PROJECT_ID, tasks, core_only, collab, sink)
+        run_pipeline(team, memory, project_id, tasks, core_only, collab, sink)
     except Exception as e:      # 最后一道闸：任何逃逸异常都变成 fail 事件
         sink.append({"event": "fail", "stage": "系统",
                      "reason": f"{type(e).__name__}: {e}"})
