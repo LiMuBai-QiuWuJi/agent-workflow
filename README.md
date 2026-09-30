@@ -149,6 +149,7 @@ python -m uvicorn web_server:app --host 0.0.0.0 --port 8000   # Web 模式（pyt
 
 - `写一个斐波那契数列脚本，输出前 20 项，保存到文件` —— 走完整评审链
 - `你好` —— 走直接回复通道，不拆任务
+- 想看一次真实运行的完整交付？`做个自我介绍，网页版` 的产出在 [examples/self-intro/](examples/self-intro/)（单文件网页 + 使用说明，编码岗产出、评审岗一次通过）
 
 ---
 

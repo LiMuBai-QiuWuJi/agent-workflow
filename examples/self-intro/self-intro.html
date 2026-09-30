@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 智能体团队 · 自我介绍</title>
+<style>
+  :root{
+    --bg:#0b1020;
+    --card:rgba(255,255,255,.055);
+    --card-hover:rgba(255,255,255,.085);
+    --line:rgba(255,255,255,.14);
+    --text:#e9edf7;
+    --muted:#a4aec6;
+    --accent:#5eead4;
+    --accent2:#8b93ff;
+    --warn:#fbbf24;
+    --ok:#34d399;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    padding:0 20px 96px;
+    font-family:"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    color:var(--text);
+    line-height:1.8;
+    font-size:16px;
+    background:
+      radial-gradient(1100px 560px at 12% -12%, #1b2a5e 0%, transparent 60%),
+      radial-gradient(900px 480px at 96% -4%, #3a1b5e 0%, transparent 55%),
+      var(--bg);
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px;margin:0 auto;}
+
+  /* ============ 顶部导航 ============ */
+  .topbar{
+    position:sticky;top:0;z-index:50;
+    margin:0 -20px 28px;
+    padding:10px 20px;
+    background:rgba(11,16,32,.78);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav{
+    max-width:960px;margin:0 auto;
+    display:flex;align-items:center;gap:6px;
+    overflow-x:auto;white-space:nowrap;
+    scrollbar-width:none;
+  }
+  .nav::-webkit-scrollbar{display:none;}
+  .nav .brand{
+    font-weight:700;font-size:14px;letter-spacing:.5px;
+    color:var(--accent);margin-right:10px;flex:0 0 auto;
+  }
+  .nav a{
+    flex:0 0 auto;
+    color:var(--muted);text-decoration:none;
+    font-size:13.5px;padding:6px 12px;border-radius:999px;
+    border:1px solid transparent;
+    transition:all .22s ease;
+  }
+  .nav a:hover{color:var(--text);background:rgba(255,255,255,.07);}
+  .nav a.active{
+    color:#04121a;background:var(--accent);
+    border-color:var(--accent);font-weight:600;
+  }
+
+  /* ============ 头部 ============ */
+  header.hero{
+    text-align:center;
+    padding:44px 22px 40px;
+    border:1px solid var(--line);
+    border-radius:24px;
+    background:linear-gradient(160deg, rgba(139,147,255,.16), rgba(94,234,212,.08) 55%, rgba(255,255,255,.03));
+    margin-bottom:34px;
+    position:relative;overflow:hidden;
+  }
+  header.hero::after{
+    content:"";position:absolute;inset:-40% -10% auto auto;
+    width:340px;height:340px;border-radius:50%;
+    background:radial-gradient(circle, rgba(94,234,212,.22), transparent 68%);
+    pointer-events:none;
+  }
+  .hero .avatar{
+    width:78px;height:78px;margin:0 auto 16px;
+    border-radius:22px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:34px;
+    background:linear-gradient(135deg,var(--accent2),var(--accent));
+    box-shadow:0 12px 34px rgba(139,147,255,.35);
+  }
+  h1{
+    margin:0 0 10px;
+    font-size:clamp(24px,4.4vw,36px);
+    line-height:1.35;
+    letter-spacing:.5px;
+    background:linear-gradient(92deg,#fff,#9ff5e6 60%,#b9c0ff);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+  }
+  .hero .sub{color:var(--muted);font-size:15.5px;max-width:640px;margin:0 auto;}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:20px;}
+  .tag{
+    font-size:12.5px;padding:5px 12px;border-radius:999px;
+    border:1px solid var(--line);background:rgba(255,255,255,.05);
+    color:var(--muted);
+  }
+  .tag.hl{color:var(--accent);border-color:rgba(94,234,212,.45);background:rgba(94,234,212,.10);}
+
+  /* ============ 卡片 / 板块 ============ */
+  details.card{
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    background:var(--card);
+    margin-bottom:18px;
+    overflow:hidden;
+    transition:border-color .25s ease, background .25s ease, box-shadow .25s ease;
+  }
+  details.card[open]{background:var(--card-hover);border-color:rgba(255,255,255,.2);box-shadow:0 10px 30px rgba(0,0,0,.22);}
+  details.card > summary{
+    list-style:none;cursor:pointer;
+    padding:18px 20px;
+    display:flex;align-items:center;gap:14px;
+    user-select:none;
+  }
+  details.card > summary::-webkit-details-marker{display:none;}
+  details.card > summary:hover{background:rgba(255,255,255,.04);}
+  .sec-no{
+    flex:0 0 auto;
+    width:34px;height:34px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:700;
+    background:rgba(139,147,255,.18);
+    border:1px solid rgba(139,147,255,.38);
+    color:#c3c8ff;
+  }
+  .sec-title{flex:1 1 auto;font-size:17.5px;font-weight:600;letter-spacing:.3px;}
+  .sec-hint{font-size:12.5px;color:var(--muted);margin-right:4px;}
+  .caret{flex:0 0 auto;color:var(--muted);font-size:13px;transition:transform .28s ease;}
+  details.card[open] .caret{transform:rotate(180deg);}
+  .card-body{padding:2px 22px 24px;border-top:1px solid var(--line);animation:fade .3s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+
+  p{margin:14px 0;}
+  .muted{color:var(--muted);}
+  strong{color:#fff;}
+  ul.clean{margin:12px 0;padding-left:0;list-style:none;}
+  ul.clean li{position:relative;padding-left:24px;margin:9px 0;}
+  ul.clean li::before{
+    content:"";position:absolute;left:6px;top:.72em;
+    width:7px;height:7px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 0 3px rgba(94,234,212,.15);
+  }
+
+  /* 双列团队卡 */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
+  .member{
+    border:1px solid var(--line);border-radius:14px;
+    padding:16px;background:rgba(11,16,32,.5);
+    transition:transform .25s ease, border-color .25s ease;
+  }
+  .member:hover{transform:translateY(-3px);border-color:rgba(94,234,212,.4);}
+  .member h3{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px;}
+  .member .role{font-size:12.5px;color:var(--muted);margin-bottom:10px;}
+  .member .io{font-size:13.5px;color:var(--muted);margin:6px 0;}
+  .member .io b{color:var(--text);font-weight:600;}
+  .pill{font-size:11.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);}
+  .pill.coder{color:#9db4ff;border-color:rgba(139,147,255,.45);background:rgba(139,147,255,.12);}
+  .pill.tester{color:var(--accent);border-color:rgba(94,234,212,.45);background:rgba(94,234,212,.12);}
+
+  /* 运行逻辑时间线 */
+  .flow{margin-top:18px;position:relative;padding-left:28px;}
+  .flow::before{
+    content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;
+    background:linear-gradient(180deg,var(--accent2),var(--accent),transparent);
+    opacity:.55;
+  }
+  .step{position:relative;margin:0 0 16px;}
+  .step::before{
+    content:"";position:absolute;left:-25px;top:9px;
+    width:12px;height:12px;border-radius:50%;
+    background:#0b1020;border:2px solid var(--accent2);
+  }
+  .step.end::before{border-color:var(--ok);background:var(--ok);}
+  .step h4{margin:0 0 4px;font-size:15.5px;}
+  .step p{margin:4px 0;font-size:14.5px;color:var(--muted);}
+  .branches{display:grid;gap:8px;margin-top:8px;}
+  .branch{
+    font-size:13.8px;padding:9px 12px;border-radius:10px;
+    border:1px solid var(--line);background:rgba(255,255,255,.035);
+  }
+  .branch b{color:var(--accent);}
+  .branch.warn b{color:var(--warn);}
+  .loopback{
+    font-size:13.5px;color:var(--warn);
+    border-left:2px dashed rgba(251,191,36,.6);
+    padding:6px 0 6px 12px;margin:8px 0;
+  }
+
+  /* 契约表 */
+  .tablewrap{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:12px;}
+  table{border-collapse:collapse;width:100%;min-width:520px;font-size:14px;}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{background:rgba(255,255,255,.05);font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap;}
+  tr:last-child td{border-bottom:none;}
+  code{
+    font-family:ui-monospace,Consolas,"Courier New",monospace;
+    font-size:13.2px;color:var(--accent);
+    background:rgba(94,234,212,.12);border:1px solid rgba(94,234,212,.3);
+    border-radius:6px;padding:1px 6px;
+  }
+
+  /* 边界双栏 */
+  .bound{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
+  .bound .box{border:1px solid var(--line);border-radius:14px;padding:16px;background:rgba(11,16,32,.5);}
+  .bound .box h4{margin:0 0 10px;font-size:15.5px;}
+  .bound .yes h4{color:var(--ok);}
+  .bound .no h4{color:#ff8fa3;}
+  .bound li{font-size:14px;color:var(--muted);}
+  .bound .no ul.clean li::before{background:#ff8fa3;box-shadow:0 0 0 3px rgba(255,143,163,.15);}
+
+  /* 交互演示区 */
+  .demo{
+    margin-top:18px;border:1px dashed rgba(94,234,212,.45);
+    border-radius:14px;padding:16px;background:rgba(94,234,212,.06);
+  }
+  .demo h4{margin:0 0 6px;font-size:15px;color:var(--accent);}
+  .demo .tip{font-size:12.8px;color:var(--muted);margin:0 0 12px;}
+  .demo textarea{
+    width:100%;min-height:74px;resize:vertical;
+    background:rgba(0,0,0,.35);color:var(--text);
+    border:1px solid var(--line);border-radius:10px;
+    padding:11px 12px;font-family:inherit;font-size:14.5px;line-height:1.6;
+    outline:none;
+  }
+  .demo textarea:focus{border-color:rgba(94,234,212,.6);}
+  .btnrow{display:flex;flex-wrap:wrap;gap:9px;margin-top:11px;}
+  button.btn{
+    font-family:inherit;font-size:14px;font-weight:600;
+    padding:9px 16px;border-radius:10px;cursor:pointer;
+    border:1px solid transparent;
+    background:linear-gradient(135deg,var(--accent2),var(--accent));
+    color:#04121a;
+    transition:transform .18s ease, filter .18s ease;
+  }
+  button.btn:hover{transform:translateY(-2px);filter:brightness(1.06);}
+  button.btn.ghost{background:transparent;color:var(--muted);border-color:var(--line);font-weight:500;}
+  button.btn.ghost:hover{color:var(--text);background:rgba(255,255,255,.06);}
+  .out{
+    margin-top:13px;font-family:ui-monospace,Consolas,"Courier New",monospace;
+    font-size:13.2px;line-height:1.75;
+    background:rgba(0,0,0,.42);border:1px solid var(--line);
+    border-radius:10px;padding:13px;white-space:pre-wrap;word-break:break-word;
+    color:#cfe8e2;
+  }
+  .out .hd{color:var(--accent);}
+  .out .wn{color:var(--warn);}
+
+  /* CTA */
+  .cta{
+    margin-top:22px;text-align:center;padding:34px 22px;
+    border:1px solid rgba(94,234,212,.4);border-radius:20px;
+    background:linear-gradient(150deg, rgba(94,234,212,.14), rgba(139,147,255,.12));
+  }
+  .cta h2{margin:0 0 10px;font-size:20px;}
+  .cta p{color:var(--muted);margin:0 auto 18px;max-width:620px;font-size:15px;}
+  .chips{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;}
+  .chip{
+    font-size:13px;padding:7px 14px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);
+    transition:all .2s ease;font-family:inherit;
+  }
+  .chip:hover{background:var(--accent);color:#04121a;border-color:var(--accent);}
+
+  footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12.8px;line-height:2;}
+  footer .dot{color:var(--accent);}
+
+  #toTop{
+    position:fixed;right:22px;bottom:24px;z-index:60;
+    width:44px;height:44px;border-radius:50%;
+    border:1px solid var(--line);cursor:pointer;
+    background:rgba(11,16,32,.85);color:var(--accent);
+    font-size:18px;line-height:1;
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    opacity:0;pointer-events:none;transform:translateY(10px);
+    transition:all .28s ease;
+  }
+  #toTop.show{opacity:1;pointer-events:auto;transform:none;}
+  #toTop:hover{background:var(--accent);color:#04121a;}
+
+  @media (max-width:720px){
+    .grid2,.bound{grid-template-columns:1fr;}
+    body{padding:0 14px 88px;}
+    .topbar{margin:0 -14px 22px;padding:9px 14px;}
+    .card-body{padding:2px 16px 20px;}
+    details.card > summary{padding:15px 14px;gap:10px;}
+    .sec-hint{display:none;}
+    header.hero{padding:34px 16px 30px;border-radius:18px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important;}
+    html{scroll-behavior:auto;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== 顶部导航 ===================== -->
+<div class="topbar">
+  <nav class="nav" id="nav">
+    <span class="brand">◈ AGENT TEAM</span>
+    <a href="#who">①我是谁</a>
+    <a href="#team">②团队编制</a>
+    <a href="#logic">③运行逻辑</a>
+    <a href="#contract">④调度契约</a>
+    <a href="#boundary">⑤能力边界</a>
+    <a href="#cta">⑥开始协作</a>
+  </nav>
+</div>
+
+<div class="wrap">
+
+  <!-- ===================== HERO ===================== -->
+  <header class="hero">
+    <div class="avatar">🧭</div>
+    <h1>你好，我是这支 AI 智能体团队的<br>项目经理型调度 Agent</h1>
+    <p class="sub">我不亲自写代码，也不给自己打分。<br>我做的事只有一件：把你的需求，变成一个可执行、可验收的交付闭环。</p>
+    <div class="tags">
+      <span class="tag hl">需求拆解</span>
+      <span class="tag hl">任务调度</span>
+      <span class="tag">契约化输出</span>
+      <span class="tag">coder + tester 双岗协作</span>
+      <span class="tag">不通过即回炉</span>
+    </div>
+  </header>
+
+  <!-- ===================== ① 我是谁 ===================== -->
+  <details class="card" id="who" open>
+    <summary>
+      <span class="sec-no">01</span>
+      <span class="sec-title">我是谁</span>
+      <span class="sec-hint">定位与职责</span>
+      <span class="caret">▼</span>
+    </summary>
+    <div class="card-body">
+      <p>我是一个 <strong>项目经理型调度 Agent</strong>。通俗地说，我是这支智能体团队里的“调度中枢”：<span class="muted">你面对的是我一个人，但真正干活的是一支按岗分工的小队。</span></p>
+      <ul class="clean">
+        <li><strong>接收</strong>你的需求，判断它到底是闲聊，还是可以落地的工程需求。</li>
+        <li><strong>拆解</strong>需求为一个个编号连续、描述自包含、可独立执行的任务。</li>
+        <li><strong>调度</strong>编码岗（coder）按任务实现，调度测试岗（tester）对产出做质量把关。</li>
+        <li><strong>兜底</strong>：评审不通过的产出，我会带着评审意见退回重做，而不是直接交给你。</li>
+        <li><strong>汇总</strong>最终交付清单，告诉你到底生成了哪些文件、该怎么验证。</li>
+      </ul>
+      <p class="muted">我的价值观一句话：<strong>把不确定的需求变成确定的交付，并且让每个交付都有人替我把过关。</strong></p>
+    </div>
+  </details>
+
+  <!-- ===================== ② 团队编制 ===================== -->
+  <details class="card" id="team" open>
+    <summary>
+      <span class="sec-no">02</span>
+      <span class="sec-title">团队编制介绍</span>
+      <span class="sec-hint">两个岗位，职责分离</span>
+      <span class="caret">▼</span>
+    </summary>
+    <div class="card-body">
+      <p>我下面常驻两个岗位，<strong>职责严格分离、互不越界</strong>——写的人不评自己，评的人不动手改。</p>
+      <div class="grid2">
+        <div class="member">
+          <h3>coder <span class="pill coder">编码岗</span></h3>
+          <div class="role">把任务变成能跑的东西</div>
+          <div class="io"><b>输入：</b>一条自包含的任务描述（目标、约束、依赖）</div>
+          <div class="io"><b>输出：</b>真实写入文件的代码，并<b>声明交付了哪些文件</b></div>
+          <div class="io"><b>纪律：</b>以工具返回结果为准，写入失败必须修正重试，绝不谎称“已写入”</div>
+        </div>
+        <div class="member">
+          <h3>tester <span class="pill tester">测试岗</span></h3>
+          <div class="role">只做质量判断，不给无根据的通过</div>
+          <div class="io"><b>输入：</b>coder 的产出 + 任务要求 + 交付清单</div>
+          <div class="io"><b>输出：</b>逐项核对后的 <b>【评审结论:通过】</b> 或 <b>【评审结论:不通过】</b></div>
+          <div class="io"><b>纪律：</b>结论必须可追溯——问题定位到具体文件或行为，并给出复现/修改建议</div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:14px;">这套结构的目的：<strong>让“做得对”由制度保证，而不是靠自我感觉良好。</strong></p>
+    </div>
+  </details>
+
+  <!-- ===================== ③ 运行逻辑 ===================== -->
+  <details class="card" id="logic" open>
+    <summary>
+      <span class="sec-no">03</span>
+      <span class="sec-title">我的运行逻辑</span>
+      <span class="sec-hint">从需求到交付的完整闭环</span>
+      <span class="caret">▼</span>
+    </summary>
+    <div class="card-body">
+      <p>我每接到一条消息，都走同一条流水线。下面是完整闭环：</p>
+
+      <div class="flow">
+        <div class="step">
+          <h4>① 接收需求</h4>
+          <p>先读清楚你要什么：目标、约束、期望的交付物形态。</p>
+        </div>
+
+        <div class="step">
+          <h4>② 判断输入类型</h4>
+          <p>这是最关键的分岔口——我不会对任何输入都无脑开工：</p>
+          <div class="branches">
+            <div class="branch"><b>A. 闲聊 / 咨询类</b> → 直接回复，不建任务、不调度岗位（例如“你能做什么”）。</div>
+            <div class="branch"><b>B. 工程需求类</b> → 信息足够、可以拆解，进入任务拆解流程。</div>
+            <div class="branch warn"><b>C. 无法拆解</b> → 拒拆。明确说明为什么拆不了（信息缺失 / 超出边界 / 目标自相矛盾），并向你索要补充信息，而不是编一个假任务糊过去。</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <h4>③ 按契约输出【任务拆解】</h4>
+          <p>把需求拆成编号连续、描述自包含、依赖显式声明的任务清单，并标注哪些是产出型任务（产出型任务必须配评审）。</p>
+        </div>
+
+        <div class="step">
+          <h4>④ 调度 coder 实现</h4>
+          <p>按依赖顺序把任务下发给编码岗，拿回真实写入的文件与交付声明。</p>
+        </div>
+
+        <div class="step">
+          <h4>⑤ 调度 tester 评审兜底</h4>
+          <p>产出型任务一律送测试岗复核：能不能跑、边界是否处理、交付清单与实际文件是否一致。</p>
+          <div class="loopback">↺ 若收到 <strong>【评审结论:不通过】</strong> → 我带着具体问题把任务退回 coder 回炉重做，重做后再送审，循环直到通过。</div>
+        </div>
+
+        <div class="step end">
+          <h4>⑥ 交付与答复</h4>
+          <p>评审通过后，我汇总交付清单（每行一个真实文件）与验证方式，一次性回复给你。</p>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- ===================== ④ 调度契约 ===================== -->
+  <details class="card" id="contract" open>
+    <summary>
+      <span class="sec-no">04</span>
+      <span class="sec-title">调度契约说明</span>
+      <span class="sec-hint">我下发任务的四条硬规矩</span>
+      <span class="caret">▼</span>
+    </summary>
+    <div class="card-body">
+      <p>我发给 coder / tester 的任务不是随口一句话，而是有固定格式的“契约”。四条硬规矩如下：</p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>条款</th><th>要求</th><th>示例</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>任务编号连续</td>
+              <td>从 #1 开始依次递增，不跳号、不重号，便于回溯与定位。</td>
+              <td><code>#1</code> <code>#2</code> <code>#3</code>…</td>
+            </tr>
+            <tr>
+              <td>任务描述自包含</td>
+              <td>每个任务单独拿出来就能执行：目标、输入、约束、验收标准写清楚，不依赖“上文你去猜”。</td>
+              <td>目标 + 交付物 + 约束 一次写全</td>
+            </tr>
+            <tr>
+              <td>依赖显式声明</td>
+              <td>需要前置结果的任务，必须写明依赖哪个任务；无依赖则显式标注“无依赖”，避免执行顺序歧义。</td>
+              <td><code>依赖：#1 的产出文件</code></td>
+            </tr>
+            <tr>
+              <td>产出型任务必配评审</td>
+              <td>凡是会生成交付物（代码 / 网页 / 文档 / 脚本）的任务，必须紧跟一个由 tester 执行的评审任务。</td>
+              <td><code>#1 实现 → #2 评审</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="demo">
+        <h4>▷ 现场体验：把一句话变成【任务拆解】</h4>
+        <p class="tip">这是内置的简化演示（纯前端本地计算，不发任何网络请求），用来直观展示上面四条契约是怎么落到纸面上的。</p>
+        <textarea id="needInput" placeholder="在这里写一句你的需求，例如：做一个单文件自我介绍网页"></textarea>
+        <div class="btnrow">
+          <button class="btn" id="btnGen" type="button">生成任务拆解预览</button>
+          <button class="btn ghost" id="btnClear" type="button">清空</button>
+        </div>
+        <pre class="out" id="demoOut">等待输入……</pre>
+      </div>
+    </div>
+  </details>
+
+  <!-- ===================== ⑤ 能力边界 ===================== -->
+  <details class="card" id="boundary" open>
+    <summary>
+      <span class="sec-no">05</span>
+      <span class="sec-title">能力边界</span>
+      <span class="sec-hint">我做什么、不做什么</span>
+      <span class="caret">▼</span>
+    </summary>
+    <div class="card-body">
+      <p>把边界讲清楚，是对你负责：<strong>我不会为了显得能干，去接我本不该做的事。</strong></p>
+      <div class="bound">
+        <div class="box yes">
+          <h4>✔ 我能做（组织交付）</h4>
+          <ul class="clean">
+            <li>代码与网页：单文件页面、前端小工具、脚本、示例工程</li>
+            <li>文档与文本：说明文档、方案对比、结构化报告</li>
+            <li>脚本与自动化：数据处理、批处理、格式转换类脚本</li>
+            <li>需求工作：拆解、排期、依赖梳理、任务下发与进度汇总</li>
+            <li>组织评审：为每个产出型任务安排 tester 复核并把结论反馈给你</li>
+          </ul>
+        </div>
+        <div class="box no">
+          <h4>✘ 我不做</h4>
+          <ul class="clean">
+            <li><strong>不做质量判断</strong>：合格与否由 tester 定稿，我不替它盖章</li>
+            <li><strong>不亲自写代码</strong>：实现是 coder 的职责，我最多把要求写清楚</li>
+            <li>不为“看起来完成”而虚构未真正生成的交付文件</li>
+            <li>需求不足时硬拆任务（我会直接拒拆并请你补充）</li>
+            <li>超出上述范围的判断，我会明说做不到，而不是含糊答应</li>
+          </ul>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:14px;">所以我的定位很清楚：<strong>不是最能干的那一个，而是让每件事都有人做、都有人查的那一个。</strong></p>
+    </div>
+  </details>
+
+  <!-- ===================== ⑥ CTA ===================== -->
+  <section class="cta" id="cta">
+    <h2>现在，把需求交给我吧</h2>
+    <p>你不用研究我怎么调度，只要说清楚“想要什么”。剩下的拆解、实现、评审、回炉，我来安排。<br>下面几句可以直接拿走改成你的版本：</p>
+    <div class="chips">
+      <button class="chip" type="button">做一个单文件自我介绍网页</button>
+      <button class="chip" type="button">写一个批量重命名文件的 Python 脚本</button>
+      <button class="chip" type="button">把这份需求整理成结构化任务清单</button>
+      <button class="chip" type="button">对比两种技术方案并给出选型建议</button>
+    </div>
+    <p class="muted" style="margin-top:16px;font-size:13.5px;">小提示：说清「交付物形态 + 使用场景 + 硬性约束」这三样，我拆出来的任务会准确得多。</p>
+  </section>
+
+  <footer>
+    <div><span class="dot">◈</span> AI 智能体团队 · 项目经理型调度 Agent <span class="dot">◈</span></div>
+    <div>单文件页面 · 纯 HTML + 内联 CSS/JS · 无任何外部依赖 · 双击即可打开</div>
+  </footer>
+
+</div>
+
+<button id="toTop" type="button" title="返回顶部" aria-label="返回顶部">↑</button>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 1. 导航高亮 + 返回顶部 ---------- */
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+  var sections = navLinks
+    .map(function (a) { return document.querySelector(a.getAttribute('href')); })
+    .filter(Boolean);
+  var toTop = document.getElementById('toTop');
+
+  function onScroll() {
+    var y = window.pageYOffset || document.documentElement.scrollTop;
+    var current = null;
+    sections.forEach(function (sec) {
+      if (sec.getBoundingClientRect().top <= 140) { current = sec; }
+    });
+    navLinks.forEach(function (a) {
+      a.classList.toggle('active', !!current && a.getAttribute('href') === '#' + current.id);
+    });
+    if (toTop) { toTop.classList.toggle('show', y > 420); }
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+
+  if (toTop) {
+    toTop.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  /* 点击导航时，若目标板块被收起则自动展开（保证锚点一定可见） */
+  navLinks.forEach(function (a) {
+    a.addEventListener('click', function () {
+      var target = document.querySelector(a.getAttribute('href'));
+      if (target && target.tagName === 'DETAILS' && !target.open) { target.open = true; }
+    });
+  });
+
+  onScroll();
+
+  /* ---------- 2. 任务拆解演示 ---------- */
+  var input = document.getElementById('needInput');
+  var out = document.getElementById('demoOut');
+  var btnGen = document.getElementById('btnGen');
+  var btnClear = document.getElementById('btnClear');
+
+  var CHAT_WORDS = ['你好', '您好', '哈喽', '在吗', '你是谁', '你是谁呀', '你能做什么', '介绍一下', '谢谢', '哈哈'];
+  var CODE_WORDS = ['代码', '脚本', '程序', '函数', '算法', '接口', 'api', 'bug', '重构'];
+  var WEB_WORDS = ['网页', '页面', 'html', '网站', '前端', 'css'];
+  var DOC_WORDS = ['文档', '报告', '方案', '说明', 'readme', '总结'];
+
+  function guessDeliverable(text) {
+    var t = text.toLowerCase();
+    if (WEB_WORDS.some(function (w) { return t.indexOf(w) > -1; })) {
+      return { file: 'index.html', kind: '单文件网页', skill: 'HTML/CSS/JS' };
+    }
+    if (DOC_WORDS.some(function (w) { return t.indexOf(w) > -1; })) {
+      return { file: 'doc.md', kind: '结构化文档', skill: 'Markdown 写作' };
+    }
+    if (CODE_WORDS.some(function (w) { return t.indexOf(w) > -1; })) {
+      return { file: 'main.py', kind: '可运行脚本', skill: 'Python 编程' };
+    }
+    return { file: 'deliverable.txt', kind: '示例交付物', skill: '按需求实现' };
+  }
+
+  function buildPlan(raw) {
+    var text = raw.trim();
+    if (!text) {
+      return {
+        head: '【无法拆解】',
+        body: '输入为空。\n原因：没有可识别的需求内容，无法判断输入类型。\n请补充：你想要的交付物是什么、用在什么场景、有没有硬性约束。'
+      };
+    }
+
+    var lower = text.toLowerCase();
+    var isChat = CHAT_WORDS.some(function (w) { return lower.indexOf(w.toLowerCase()) > -1; });
+    if (isChat && text.length <= 20) {
+      return {
+        head: '类型判断：闲聊 / 咨询（A 类）',
+        body: '处理方式：直接回复，不建任务、不调度岗位。\n\n（演示页仅作类型识别，不会真的回复内容。）'
+      };
+    }
+
+    if (text.length < 6) {
+      return {
+        head: '类型判断：信息不足（C 类）→ 拒拆',
+        body: '原因：需求过于简短，无法确定交付物形态与验收标准。\n我不会编一个假任务交差，请补充下面两点后我再拆：\n  1) 你要的最终交付物是什么（文件 / 页面 / 脚本 / 文档）；\n  2) 使用场景或必须满足的约束。'
+      };
+    }
+
+    var d = guessDeliverable(text);
+    var lines = [];
+    lines.push('类型判断：工程需求（B 类）→ 可拆解');
+    lines.push('');
+    lines.push('【任务拆解】');
+    lines.push('');
+    lines.push('#1 [coder · 编码岗] 实现：' + text);
+    lines.push('   目标：产出 ' + d.kind + '（' + d.skill + '）');
+    lines.push('   交付物：' + d.file + '（单文件，双击即可运行/打开）');
+    lines.push('   约束：无外部依赖，写入后必须核对文件真实存在');
+    lines.push('   依赖：无依赖');
+    lines.push('   类型：产出型任务 → 必配评审');
+    lines.push('');
+    lines.push('#2 [tester · 测试岗] 评审：#1 的产出');
+    lines.push('   依赖：#1 的交付文件 ' + d.file);
+    lines.push('   核对点：1) 与需求是否一致 2) 能否正常运行 3) 边界情况 4) 交付清单与实际文件是否相符');
+    lines.push('   输出：【评审结论:通过】或【评审结论:不通过】+ 具体问题定位');
+    lines.push('');
+    lines.push('不通过流程：带着 #2 的问题定位退回 #1 回炉重做 → 重新送审 → 直到通过为止。');
+    return { head: '', body: lines.join('\n') };
+  }
+
+  function generate() {
+    var plan = buildPlan(input.value);
+    out.textContent = plan.head ? ('⚠ ' + plan.head + '\n\n' + plan.body) : plan.body;
+  }
+
+  if (btnGen) { btnGen.addEventListener('click', generate); }
+  if (btnClear) {
+    btnClear.addEventListener('click', function () {
+      input.value = '';
+      out.textContent = '等待输入……';
+      input.focus();
+    });
+  }
+  if (input) {
+    input.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { generate(); }
+    });
+  }
+
+  /* ---------- 3. CTA 示例需求一键填入 ---------- */
+  Array.prototype.slice.call(document.querySelectorAll('.chip')).forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      if (!input) { return; }
+      input.value = chip.textContent.trim();
+      generate();
+      var demo = document.querySelector('.demo');
+      if (demo) { demo.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
