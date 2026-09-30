@@ -103,7 +103,7 @@ import os
 import sys
 import time
 
-from call_llm import USAGE_LOG
+from call_llm import USAGE_LOG, usage_summary
 from core.dispatcher import plan_tasks, run_pipeline
 from core.memory import Memory
 from core.task_table import DirectReply, TaskTableError
@@ -231,6 +231,8 @@ def main() -> None:
         print("\n===== 本次运行账单 =====")
         for i, u in enumerate(USAGE_LOG, 1):
             print(f"第{i}次调用 prompt={u['prompt']} completion={u['completion']}")
+        total = usage_summary()
+        print(f"累计 {total['calls']} 次调用：prompt 合计 {total['prompt']}，completion 合计 {total['completion']}")
     finally:
         sys.stdout, sys.stderr = old_stdout, old_stderr
         log_file.close()

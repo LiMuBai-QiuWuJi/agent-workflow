@@ -19,6 +19,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
+from call_llm import USAGE_LOG, usage_summary
 from core.dispatcher import plan_tasks, run_pipeline
 from core.memory import Memory
 from core.task_table import DirectReply, TaskTableError
@@ -56,6 +57,7 @@ class RunRequest(BaseModel):
 
 def _run_pipeline(sink: SSESink, requirement: str) -> None:
     """与 main.py 同款接线：配置 → 调度拆解 → 任务表执行。异常也走事件流。"""
+    usage_base = len(USAGE_LOG)   # 本轮账单起点：服务器长驻，日志跨轮累计不清
     try:
         team = Team.seed_builtin()
         memory = Memory()
@@ -93,6 +95,8 @@ def _run_pipeline(sink: SSESink, requirement: str) -> None:
         sink.append({"event": "fail", "stage": "系统",
                      "reason": f"{type(e).__name__}: {e}"})
     finally:
+        # 无论成功/失败/直接回复，都补一张本轮 token 账单（前端忽略未知事件也不受影响）
+        sink.append({"event": "usage", **usage_summary(usage_base)})
         sink.q.put(None)        # 流结束标记
 
 

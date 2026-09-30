@@ -13,6 +13,29 @@ env_path = os.path.join(script_dir, ".env")
 USAGE_LOG: list[dict] = []
 """token 账单：每次成功调用的 {model, prompt, completion}，供对比实验汇总。"""
 
+
+def log_usage(model: str, usage) -> None:
+    """记录一次调用的 token 消耗（流式/非流式共用出口）。"""
+    if usage is None:
+        return
+    USAGE_LOG.append({
+        "model": model,
+        "prompt": usage.prompt_tokens,
+        "completion": usage.completion_tokens,
+    })
+
+
+def usage_summary(since: int = 0) -> dict:
+    """累计账单：USAGE_LOG[since:] 的调用次数与 prompt/completion 合计。
+
+    since 用于 Web 长驻进程按"本轮运行"统计（服务器启动以来日志不清空）。"""
+    items = USAGE_LOG[since:]
+    return {
+        "calls": len(items),
+        "prompt": sum(u["prompt"] for u in items),
+        "completion": sum(u["completion"] for u in items),
+    }
+
 class ApiKeyPool:
     """API Key 池：首次调用 get_key 时扫描 .env 与环境变量中所有含 API_KEY 的条目，
     键名统一大写建索引；之后一律走内存，不再读文件。"""
@@ -146,8 +169,17 @@ def _extract_stream(response: Stream[ChatCompletionChunk]) -> tuple[dict, bool]:
     assistant_content = ""
     accumulated_tool_calls = {}
     finish_reason = None
+    usage = None
+    model = ""
 
     for chunk in response:
+        if chunk.usage is not None:
+            # stream_options=include_usage 的汇总块（最后一个 chunk）
+            usage = chunk.usage
+        if chunk.model:
+            model = chunk.model
+        if not chunk.choices:
+            continue            # usage-only 块：正文与工具已收完
         delta = chunk.choices[0].delta
 
         if delta.content:
@@ -171,7 +203,9 @@ def _extract_stream(response: Stream[ChatCompletionChunk]) -> tuple[dict, bool]:
 
         if chunk.choices[0].finish_reason is not None:
             finish_reason = chunk.choices[0].finish_reason
-            break
+            # 不 break：usage 汇总块还在流后面，提前退出会丢账单
+
+    log_usage(model, usage)
 
     if finish_reason == "length":
         # 截断感知：finish_reason=="length" = 被 max_tokens 掐断，不是"模型没话说"
@@ -188,12 +222,7 @@ def _extract_stream(response: Stream[ChatCompletionChunk]) -> tuple[dict, bool]:
 
 
 def _extract_nonstream(response: ChatCompletion) -> tuple[dict, bool]:
-    if response.usage is not None:
-            USAGE_LOG.append({
-                "model": response.model,
-                "prompt": response.usage.prompt_tokens,
-                "completion": response.usage.completion_tokens,
-            })
+    log_usage(response.model, response.usage)
     msg = response.choices[0].message
     msg_dict = msg.model_dump(exclude_none=True)
     if response.choices[0].finish_reason == "length":
@@ -223,7 +252,7 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
     def _request_once() -> tuple[dict, bool]:
         """发一次聊天请求并统一抽取结果（流式/非流式共用出口）。"""
         msgs = session.get_messages_for_request(parameters)
-        response = client.chat.completions.create(
+        create_kwargs = dict(
             model=parameters.model,
             messages=msgs,
             max_tokens=parameters.max_tokens,
@@ -233,6 +262,10 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
             tools=parameters.tools,
             tool_choice=parameters.tool_choice,
         )
+        if parameters.stream:
+            # 让最后一个 chunk 携带 usage 汇总（token 账单流式路径也要记）
+            create_kwargs["stream_options"] = {"include_usage": True}
+        response = client.chat.completions.create(**create_kwargs)
         if parameters.stream:
             print("DeepSeek: ", end="", flush=True)
             msg_dict, has_tools = _extract_stream(response)
