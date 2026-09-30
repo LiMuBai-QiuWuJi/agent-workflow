@@ -66,10 +66,19 @@
 
 ## 快速开始
 
+> **⚡ 两种运行方式，任选其一，效果完全一样：**
+>
+> | 路线 | 适合谁 |
+> |---|---|
+> | **A：Docker（推荐）** | 大多数人——环境全自动配好，复制粘贴三条命令就完事 |
+> | **B：本地 Python** | 没接触过 Docker、不想装大软件、或电脑配置较低的人 |
+>
+> 两条路线只需要准备其中一条，别两个都装。
+
 ### 前置
 
 - 一个 DeepSeek API Key（[platform.deepseek.com](https://platform.deepseek.com) 申请；也适用于任何 OpenAI 兼容端点，改 `run_config.txt` 的 `api.base_url` 即可）
-- Docker，或 Python ≥ 3.10
+- 运行环境：**下面两条路线二选一**——路线 A 用 Docker（推荐，环境全自动搞定）；**如果你没接触过 Docker，路线 B 只装 Python 就能跑，效果完全一样**
 
 ### 第一步：获取代码
 
@@ -96,7 +105,7 @@ DEEPSEEK_API_KEY=sk-你的key
 
 说明：系统会扫描 `.env` 与环境中所有**含 `API_KEY` 的键名**建索引，按岗位的引擎标识模糊匹配——键名写成 `DEEPSEEK_API_KEY`、`DEEPSEEK_OPENAI_API_KEY` 都可以。不配 `.env` 也行，改用环境变量注入（见 Docker 部分的 `-e` 参数）。
 
-### Docker（推荐）
+### 路线 A：Docker（推荐）
 
 ```bash
 # 在克隆下来的 agent-workflow 目录里执行
@@ -114,17 +123,19 @@ docker run -p 8000:8000 -v %cd%\.env:/app/.env agent-workflow
 
 > 网络受限环境构建：加 `--build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple` 走国内 PyPI 源；基础镜像（python:3.14-slim）拉取需在 Docker 引擎设置中配置 registry 镜像源。
 
-### 本地运行
+### 路线 B：本地 Python
 
 ```bash
-python -m venv .venv
+python -m venv .venv            # 提示找不到 python 就改用：py -m venv .venv
 .venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
 pip install fastapi uvicorn openai pydantic python-dotenv python-docx pypdf
 
-python main.py                  # 终端模式：直接输入需求
+python main.py                  # 终端模式：直接输入需求（python 不行就换 py main.py，二选一）
 # 或
-python -m uvicorn web_server:app --host 0.0.0.0 --port 8000   # Web 模式
+python -m uvicorn web_server:app --host 0.0.0.0 --port 8000   # Web 模式（python 不行就换 py -m uvicorn ...）
 ```
+
+> Windows 提示：部分电脑只装了 Python 启动器（`py` 命令）而 `python` 不在 PATH——`python` 和 `py` 哪个能跑用哪个，效果完全一样。
 
 ### 产出在哪里
 
