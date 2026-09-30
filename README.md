@@ -61,6 +61,7 @@
 - **FastAPI + SSE**：一次运行一条事件流（`plan → task_start → dispatch → review → verdict → verified → done`），终端与浏览器消费同一数据源
 - **Web 运行视图**：总览流程图随执行进度逐节点点亮（Mermaid 渲染，CDN 不可用时自动回退手绘版）；轨迹图按时间生长，退回画带编号与颜色的回边
 - **三结局产出说明**：成功 = 逐文件产出手册（绝对路径 / 用途 / 按扩展名的使用方法）；失败 = 按失败环节解释原因（可折叠查看原始现场）；直接回复 = 答复全文
+- **Token 账单**：每轮运行结束自动结算调用次数与 prompt / completion 消耗，终端与 Web 状态栏同一份数据（流式 / 非流式都记账，跨轮不串账）
 
 ---
 
@@ -200,7 +201,8 @@ agent-workflow/
 ├── skill/                  # 工具集：write_file / read_file / calculator / run_cmd（超时+截断+cwd 限定）
 ├── web/index.html          # Web 运行视图（暗色、双流程图、三结局弹窗、配置抽屉）
 ├── test_*.py               # 离线剧本回归测试（打桩 LLM，零 API 消耗）
-└── Dockerfile              # 一体化镜像（运行时 7 个真实依赖，镜像约 273MB）
+├── Dockerfile              # 一体化镜像（运行时 7 个真实依赖，镜像约 273MB）
+└── examples/self-intro/    # 一次真实运行的完整交付示例（自我介绍网页 + 使用说明）
 ```
 
 ### 运行配置 `run_config.txt`
@@ -237,7 +239,6 @@ python test_pipeline_stub.py       # 任务表执行 2 场景：路由/依赖/�
 ## Roadmap
 
 - [ ] **修改型需求的多轮迭代**：跨运行保留工作区与团队记忆，支持"在此基础上改一下"的连续协作（当前每次运行是全新团队 + 工作区清零，修改型需求会断路）
-- [ ] token 成本统计面板（USAGE_LOG 账单已在落盘，缺可视化）
 - [ ] 岗位与技能注册表：新岗位 = 一个 prompt 文件 + 一条编制记录
 - [ ] 联网工具（搜索 / 网页抓取）
 
