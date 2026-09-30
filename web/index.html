@@ -567,6 +567,7 @@ function trAddNode(colKey, label, sub, opts = {}) {
 /* ================= 事件驱动 ================= */
 const FAIL_STAGE = { "调度": "plan", "编码": "code", "评审": "review", "交付核验": "verify" };
 const statusEl = document.getElementById("status");
+let lastBill = "";            // 本轮账单文本（usage 事件捕获，运行结束行合并显示）
 
 /* ================= 结果弹窗：产出说明 / 失败说明 ================= */
 let runTasks = [];            // 本次运行的任务表（plan 事件捕获，用于用途匹配）
@@ -720,6 +721,10 @@ function applyEvent(e) {
       ovSet("verify", "done");
       trAddNode("verify", "交付核验", (e.declared || []).length + " 个文件");
       break;
+    case "usage":
+      lastBill = `本轮账单：${e.calls} 次调用 · prompt ${e.prompt} + completion ${e.completion} tokens`;
+      statusEl.textContent = lastBill;
+      break;
     case "done":
       ovSet("done", "done");
       trAddNode("end", "✓ 完成", `${e.task_id} · 退回 ${e.rejects} 次`, { end: "end-ok" });
@@ -759,6 +764,7 @@ function resetCharts() {
   trace.innerHTML = "";
   trPrev = null;
   trRow = 0;
+  lastBill = "";
 }
 
 async function playReplay() {
@@ -776,7 +782,7 @@ async function playReplay() {
   }
   let i = 0;
   const step = () => {
-    if (i >= events.length) { statusEl.textContent = "回放完毕"; return; }
+    if (i >= events.length) { statusEl.textContent = "回放完毕" + (lastBill ? " ｜ " + lastBill : ""); return; }
     applyEvent(events[i++]);
     replayTimer = setTimeout(step, 750);
   };
@@ -816,7 +822,7 @@ async function startRun(requirement) {
         }
       }
     }
-    statusEl.textContent = "运行结束";
+    statusEl.textContent = "运行结束" + (lastBill ? " ｜ " + lastBill : "");
   } catch (err) {
     statusEl.textContent = "运行失败：" + err.message;
   } finally {
