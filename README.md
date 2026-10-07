@@ -154,6 +154,16 @@ python -m uvicorn web_server:app --host 0.0.0.0 --port 8000   # Web 模式（pyt
 
 ---
 
+## 演示视频
+
+真实 API 完整运行录屏（3 分 32 秒）：调度拆解 → 编码 → 评审两次退回修改 → 复审通过 → 交付核验闭环，轨迹图上的「退回 #1/#2」与最终亮灯全程可见。
+
+<video src="docs/demo.mp4" controls="controls" muted="muted" style="max-width:100%"></video>
+
+评审通过后的交付物试玩（贪吃蛇网页，21 秒）：
+
+<video src="docs/demo-deliverable.mp4" controls="controls" muted="muted" style="max-width:100%"></video>
+
 ## 界面预览
 
 Web 运行视图实机截图（需求：「做个自我介绍，网页版」）：
