@@ -249,6 +249,21 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
                                    "stage": "交付核验",
                                    "reason": f"声明 {len(declared)} 个文件，缺失 {missing}"})
                 return None
+            # 合同核对（纯代码，2026-10-08 实测暴露）：任务表签的交付物 vs 编码岗
+            # 交付清单不一致 = 擅自改名，契约违约。与"评审不给结论"同权视为不通过，
+            # 走下方统一退回循环让编码岗按合同文件名重交——不相信模型自觉，代码兜底。
+            if core_deliverable:
+                contract_name = os.path.basename(core_deliverable.strip())
+                if not any(os.path.basename(d) == contract_name for d in declared):
+                    verdict = "不通过"
+                    tester_reply += (
+                        f"\n（调度系统核验：任务表合同要求交付「{contract_name}」，"
+                        f"交付清单声明 {declared}，文件名与合同不符——"
+                        f"请按合同文件名重新交付，禁止擅自改名。）")
+                    print(f"\n===== {task_id} 合同核对不通过：要求「{contract_name}」，"
+                          f"实交 {declared}，退回 =====")
+
+        if verdict == "通过":
             print(f"\n===== 评审链闭环成功（{task_id}，退回 "
                   f"{reject_counts.get(task_id, 0)} 次，"
                   f"核验通过 {len(declared)} 个文件：{declared}）=====")

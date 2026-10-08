@@ -111,6 +111,24 @@ def scenario_direct_reply():
         raise AssertionError("混合输出竟然解析成任务表")
 
 
+def scenario_standalone_deliver_line():
+    # 「本任务适用规则」把交付声明挤到任务行之外的下一行（2026-10-08 贪吃蛇实测格式）
+    raw = """【任务拆解】
+任务#1 [岗位:coder] 实现贪吃蛇游戏。
+本任务适用规则：
+1. 文件名一律中文。
+以上条目如与你原有工作方式冲突或重复，以本段为准；未提及的原有规则照常执行。
+交付：贪吃蛇.html
+任务#2 [岗位:tester] [评审 任务#1] 实测验收
+依赖：任务#2 ← 任务#1
+"""
+    tasks = parse_task_table(raw, FakeTeam())
+    assert tasks[0].deliverable == "贪吃蛇.html", tasks[0].deliverable
+    assert "交付" not in tasks[0].description
+    assert tasks[1].deliverable == "" and tasks[1].review_of == "任务#1"
+    print("场景 9 通过：交付声明独立成行也能归并进正确任务（不误挂评审任务）")
+
+
 if __name__ == "__main__":
     scenario_valid()
     scenario_unknown_role()
@@ -119,4 +137,5 @@ if __name__ == "__main__":
     scenario_no_decompose()
     scenario_garbage()
     scenario_direct_reply()
-    print("八场景全过——任务表契约：解析、剥离、校验、直接回复、违约即失败")
+    scenario_standalone_deliver_line()
+    print("九场景全过——任务表契约：解析、剥离、校验、直接回复、违约即失败")

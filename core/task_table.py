@@ -43,6 +43,10 @@ class Task:
 TASK_RE = re.compile(r"^任务#(\d+)\s*\[岗位:([A-Za-z_\-]+)\]\s*(?P<body>.*)$")
 REVIEW_RE = re.compile(r"\[评审\s*任务#(\d+)\]")
 DELIVER_RE = re.compile(r"；?交付[:：]\s*([^\s；。]+)")
+STANDALONE_DELIVER_RE = re.compile(r"^交付[:：]\s*([^\s；。]+)")
+"""交付声明独立成行：调度岗把「本任务适用规则」附在任务描述后时，
+交付声明常被挤到任务行之外的下一行（2026-10-08 实测：贪吃蛇交付声明漏解析，
+产出型任务被误当分析型，触发假回执与假总结）。归属 = 最近一个还没有交付声明的非评审任务。"""
 DEP_RE = re.compile(r"^依赖[:：]\s*任务#(\d+)\s*←\s*任务#(\d+)\s*$")
 NO_DECOMPOSE_RE = re.compile(r"无法拆解[:：]\s*(?P<why>.+)")
 DIRECT_RE = re.compile(r"直接回复[:：]\s*(?P<answer>.+)", re.S)
@@ -108,6 +112,16 @@ def parse_task_table(reply: str, team) -> list[Task]:
     for t in tasks:
         if t.review_of and t.review_of not in id_set:
             raise TaskTableError(f"{t.id} 是评审任务，但被评审对象 {t.review_of} 不在任务表中", raw)
+
+    # —— 交付声明独立成行：归并进最近一个没有交付声明的非评审任务 ——
+    for ln in lines:
+        m = STANDALONE_DELIVER_RE.match(ln)
+        if not m:
+            continue
+        target = next((t for t in reversed(tasks)
+                       if not t.deliverable and not t.review_of), None)
+        if target is not None:
+            target.deliverable = m.group(1).strip()
 
     # —— 依赖行：解析进对应任务并校验（只允许依赖编号更小的任务）——
     for ln in lines:

@@ -175,6 +175,29 @@ def scenario_review_truncated_recovery_fails():
     print("场景 8 通过：补发仍无结论按不通过退回一次，修正后复审闭环（补发只给一次）")
 
 
+def scenario_contract_filename_mismatch():
+    # 2026-10-08 贪吃蛇实测暴露：编码岗无视合同文件名（应交 fib.py 实交 fib_v2.py），
+    # 评审还通过——合同核对（纯代码）必须把"通过"改判不通过并退回，按合同重交后才闭环
+    coder_wrong = "实现完成（擅自改名）\n【交付清单】\nfib_v2.py\n[请求协作:tester] 请审查"
+    coder_right = "第 1 次修正（按合同文件名重交）\n【交付清单】\nfib.py\n[请求协作:tester] 请复审"
+    stub, calls = make_stub([coder_wrong, coder_right], [VERDICT_OK, VERDICT_OK])
+    dispatcher.dispatch = stub
+    task = Task(id="任务#1", num=1, role_key="coder",
+                description="桩需求", deliverable="fib.py")
+    review = Task(id="任务#2", num=2, role_key="tester",
+                  description="评审", review_of="任务#1")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dispatcher.run_review_chain(FakeTeam(), None, "stub_test", task, review)
+    out = buf.getvalue()
+    assert "合同核对不通过" in out
+    assert "闭环成功" in out and "退回 1 次" in out
+    assert len(calls["coder"]) == 2
+    # 退回任务文本必须带上合同问题清单，编码岗才知道该改什么
+    assert "合同" in calls["coder"][1] and "fib.py" in calls["coder"][1]
+    print("场景 9 通过：擅自改名被合同核对拦下退回，按合同重交后闭环")
+
+
 if __name__ == "__main__":
     scenario_pass_after_2_rejects()
     scenario_exceed_max_rejects()
@@ -184,4 +207,5 @@ if __name__ == "__main__":
     scenario_truncated_recovery_fails()
     scenario_review_truncated_recovered()
     scenario_review_truncated_recovery_fails()
-    print("八场景全过——受控循环、交付核验、双侧截断补发")
+    scenario_contract_filename_mismatch()
+    print("九场景全过——受控循环、交付核验、合同核对、双侧截断补发")
