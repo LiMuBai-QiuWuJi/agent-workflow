@@ -168,6 +168,29 @@ def apply_run_config(team, config: dict) -> None:
                 setattr(role, attr, type(getattr(role, attr))(value))
 
 
+def _run_web_server() -> None:
+    """起 uvicorn 并自动打开浏览器；Ctrl+C 停服务，回到需求循环。"""
+    import subprocess
+    import webbrowser
+
+    url = "http://127.0.0.1:8000"
+    print(f"\n===== Web 运行视图：{url}（Ctrl+C 停服务返回需求循环）=====")
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "web_server:app",
+         "--host", "0.0.0.0", "--port", "8000"])
+    try:
+        webbrowser.open(url)
+        proc.wait()
+    except KeyboardInterrupt:
+        print("\n===== Web 服务已停止 =====")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
 def main() -> None:
     os.makedirs("运行记录", exist_ok=True)
     log_path = os.path.join("运行记录", f"运行_{time.strftime('%Y%m%d_%H%M%S')}.txt")
@@ -176,63 +199,88 @@ def main() -> None:
     tee = Tee(old_stdout, log_file)
     sys.stdout, sys.stderr = tee, tee
     print(f"（本次运行同时记录到 {log_path}）")
+    print("命令提示：clear 清除记忆与账单 ｜ /web 打开网页运行视图 ｜ exit 退出")
 
     try:
         team = Team.seed_builtin()
         memory = Memory()
         config = load_run_config()          # 启动读一次：只含通用公用配置
         apply_run_config(team, config)      # 配置真正生效：岗位参数/循环刹车/API 地址/协作开关
-        collab = config.get("dispatch.collab", "True").strip().lower() != "false"
-        core_only = config.get("verify.core_only", "True").strip().lower() != "false"
+        round_no = 0
+        while True:
+            collab = config.get("dispatch.collab", "True").strip().lower() != "false"
+            core_only = config.get("verify.core_only", "True").strip().lower() != "false"
 
-        requirement = input("需求：")
+            try:
+                requirement = input("需求：").strip()
+            except (KeyboardInterrupt, EOFError):
+                print("\n===== 已退出，岗位记忆随进程结束自动清空 =====")
+                break
+            if not requirement:
+                continue
+            if requirement.lower() in ("exit", "quit"):
+                print("===== 已退出，岗位记忆随进程结束自动清空 =====")
+                break
+            if requirement.lower() == "clear":
+                # 清除运行结果：岗位会话与账单归零；编制与配置保留（进程外无落盘，天然隔离）
+                memory = Memory()
+                USAGE_LOG.clear()
+                print("===== 已清除：岗位记忆与账单归零（编制与运行配置保留）=====")
+                continue
+            if requirement.lower() == "/web":
+                _run_web_server()
+                continue
 
-        # 智能分工：调度岗（唯一做分工决策的 LLM）拿编制表+需求产出任务表 ——
-        events: list[dict] = []      # 事件流：Web 总览图/轨迹图与 SSE 的统一数据源
-        try:
-            tasks = plan_tasks(team, requirement, events)
-        except DirectReply as e:
-            # 问候/自我介绍/纯问答：调度岗直接应答，不拆解也不判失败。
-            # 队列/列表持有 plan dict 引用，原地改成 direct_reply（SSE 与 JSONL 同步）。
-            events[0].clear()
-            events[0].update({"event": "direct_reply", "answer": e.answer})
-            print(f"\n调度岗：{e.answer}")
-            tasks = None
-        except TaskTableError as e:
-            events[0].clear()
-            events[0].update({"event": "fail", "stage": "调度",
-                              "reason": "任务拆解契约违约", "raw": e.raw})
-            print(f"\n===== 任务拆解失败（调度契约违约），判失败 =====\n{e}")
-            tasks = None
+            round_no += 1
+            usage_base = len(USAGE_LOG)   # 本轮账单起点：进程长驻，账单跨轮累计不清
+            events: list[dict] = []      # 事件流：Web 总览图/轨迹图与 SSE 的统一数据源
+            try:
+                tasks = plan_tasks(team, requirement, events)
+            except DirectReply as e:
+                # 问候/自我介绍/纯问答：调度岗直接应答，不拆解也不判失败。
+                # 队列/列表持有 plan dict 引用，原地改成 direct_reply（SSE 与 JSONL 同步）。
+                events[0].clear()
+                events[0].update({"event": "direct_reply", "answer": e.answer})
+                print(f"\n调度岗：{e.answer}")
+                tasks = None
+            except TaskTableError as e:
+                events[0].clear()
+                events[0].update({"event": "fail", "stage": "调度",
+                                  "reason": "任务拆解契约违约", "raw": e.raw})
+                print(f"\n===== 任务拆解失败（调度契约违约），判失败 =====\n{e}")
+                tasks = None
 
-        if tasks:
-            # 用结构化任务表替换 plan 事件的 raw 正文（两张图的"调度拆解"节点数据源）
-            events[0] = {"event": "plan",
-                         "tasks": [{"id": t.id, "role": t.role_key,
-                                    "desc": t.description[:80],
-                                    "review_of": t.review_of,
-                                    "deliverable": t.deliverable,
-                                    "depends_on": t.depends_on}
-                                   for t in tasks]}
-            print("\n----- 调度岗任务表 -----")
-            for t in tasks:
-                tag = f"[评审 {t.review_of}] " if t.review_of else ""
-                dep = f"（依赖：{t.depends_on}）" if t.depends_on else ""
-                print(f"{t.id} [{t.role_key}] {tag}{t.description[:60]}…{dep}")
-            run_pipeline(team, memory, PROJECT_ID, tasks, core_only, collab, events)
+            if tasks:
+                # 用结构化任务表替换 plan 事件的 raw 正文（两张图的"调度拆解"节点数据源）
+                events[0] = {"event": "plan",
+                             "tasks": [{"id": t.id, "role": t.role_key,
+                                        "desc": t.description[:80],
+                                        "review_of": t.review_of,
+                                        "deliverable": t.deliverable,
+                                        "depends_on": t.depends_on}
+                                       for t in tasks]}
+                print("\n----- 调度岗任务表 -----")
+                for t in tasks:
+                    tag = f"[评审 {t.review_of}] " if t.review_of else ""
+                    dep = f"（依赖：{t.depends_on}）" if t.depends_on else ""
+                    print(f"{t.id} [{t.role_key}] {tag}{t.description[:60]}…{dep}")
+                run_pipeline(team, memory, PROJECT_ID, tasks, core_only, collab, events)
 
-        # 事件流落盘：两张图先对录播开发，SSE 落地后同源切直播
-        events_path = os.path.join("运行记录", f"events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-        with open(events_path, "w", encoding="utf-8") as f:
-            for i, e in enumerate(events, 1):
-                f.write(json.dumps({"seq": i, **e}, ensure_ascii=False) + "\n")
-        print(f"（事件流已记录到 {events_path}）")
+            # 事件流落盘：两张图先对录播开发，SSE 落地后同源切直播
+            # 文件名带轮次号，防同秒连跑互相覆盖
+            events_path = os.path.join(
+                "运行记录",
+                f"events_{time.strftime('%Y%m%d_%H%M%S')}_r{round_no}.jsonl")
+            with open(events_path, "w", encoding="utf-8") as f:
+                for i, e in enumerate(events, 1):
+                    f.write(json.dumps({"seq": i, **e}, ensure_ascii=False) + "\n")
+            print(f"（事件流已记录到 {events_path}）")
 
-        print("\n===== 本次运行账单 =====")
-        for i, u in enumerate(USAGE_LOG, 1):
-            print(f"第{i}次调用 prompt={u['prompt']} completion={u['completion']}")
-        total = usage_summary()
-        print(f"累计 {total['calls']} 次调用：prompt 合计 {total['prompt']}，completion 合计 {total['completion']}")
+            print(f"\n===== 第 {round_no} 轮账单 =====")
+            for i, u in enumerate(USAGE_LOG[usage_base:], 1):
+                print(f"第{i}次调用 prompt={u['prompt']} completion={u['completion']}")
+            total = usage_summary(usage_base)
+            print(f"本轮 {total['calls']} 次调用：prompt 合计 {total['prompt']}，completion 合计 {total['completion']}")
     finally:
         sys.stdout, sys.stderr = old_stdout, old_stderr
         log_file.close()

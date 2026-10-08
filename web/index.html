@@ -360,6 +360,7 @@
       <option value="replay_reject.jsonl">含退回循环（退回 2 次）</option>
     </select>
     <button id="btnReplay" class="act">重播</button>
+    <button id="btnClear" class="act">清除</button>
   </div>
 </aside>
 <div id="resultMask">
@@ -789,6 +790,13 @@ async function playReplay() {
   step();
 }
 document.getElementById("btnReplay").addEventListener("click", playReplay);
+
+/* 清除：重置两张图与账单显示（等价于终端输入 clear 的视图效果） */
+document.getElementById("btnClear").addEventListener("click", () => {
+  clearTimeout(replayTimer);
+  resetCharts();
+  statusEl.textContent = "已清除运行视图";
+});
 
 /* ================= 直播模式：FastAPI 在就解锁输入框，与终端同一底层 ================= */
 async function startRun(requirement) {
