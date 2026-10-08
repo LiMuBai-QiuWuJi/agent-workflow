@@ -338,14 +338,20 @@ def call_llm(parameters: CallParameters, session: ChatSession = None) -> str:
 
             if TRUNCATION_MARK in final_reply:
                 # 截断补发（同轮内部闭环）：最终输出被 max_tokens 掐断时，
-                # 立刻要一次短回复把结论与契约信号补回来.限一次
+                # 立刻要一次短回复把结论与契约信号补回来.限一次。
+                # 返回值 = 前半全文 + 补发段拼接（不丢中段）：
+                # 回执、评审任务文本都依赖这个返回值，只回补发段会把主分析撕掉。
+                truncated_part = final_reply.replace(TRUNCATION_MARK, "")
                 session.add_user(
                     "系统提示：你的上一段输出被 max_tokens 截断。不要重复前文，"
                     "只补发最终结论与契约信号（【交付清单】/[请求协作:岗位key]），尽量精简。"
                 )
                 final_dict, _ = _request_once()
                 session.add_assistant(msg_dict=final_dict)
-                final_reply = final_dict.get("content", "") or final_reply
+                recovery = final_dict.get("content", "")
+                if recovery.strip():
+                    final_reply = (truncated_part + "\n" + recovery).strip()
+                # recovery 也为空时保留带截断标记的原返回值，交由上层判失败
 
             return final_reply
 

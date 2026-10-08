@@ -103,7 +103,7 @@ class Team:
             prompt_name=PromptFileName.ASSISTANT,
             engine="deepseek", model="deepseek-flash",
             temperature=0.3,
-            max_tokens=4096,
+            max_tokens=8192,   # 全文分析类产出常超 4096（2026-10-08 实测 4098 撞截断）；截断补发兜底仍在
             tools=[CALCULATOR_SCHEMA, READFILE_SCHEMAS],   # 只读权限：不给 write_file / run_cmd
             tool_choice="auto",
             tool_map={

@@ -411,3 +411,31 @@ def run_pipeline(team: Team, memory: Memory, project_id: str,
         if not task.deliverable:
             report_back(memory, project_id, team, task.id, task.role_key, out)
 
+    # 面向用户的总结回复：本轮有分析类任务时，调度岗基于记忆中已有的【任务回执】
+    # 给用户一个简要交代（回执已在记忆里，本条调用很短，不重复传全文）。
+    # 纯代码触发，星型中枢统一对外的最后一步——否则对话会在岗位产出后戛然而止。
+    if memory is not None and any(not t.deliverable
+                                  for t in tasks if not t.review_of):
+        srole = team.get("scheduler")
+        sparams = CallParameters(
+            api_key=ApiKeyPool.get_key(srole.engine),
+            base_url=API_BASE_URL,
+            model=srole.model,
+            system_prompt=team.load_prompt(srole),
+            user_input=("上一条【任务回执】是本轮分析类任务的完整产出。"
+                        "请面向用户输出一段简要总结：做了什么、关键结论是什么、"
+                        "对用户后续有什么用。直接输出回复正文，不要使用任务表格式。"),
+            temperature=srole.temperature,
+            max_tokens=srole.max_tokens,
+            timeout=TIMEOUT,
+            stream=False,
+            context_mode="recent",
+            context_window=10,
+        )
+        session = memory.get_session(project_id, "scheduler", sparams.system_prompt)
+        summary = call_llm(sparams, session=session)
+        memory.settle(session)
+        print(f"\n----- 调度岗总结（面向用户）-----\n{summary}")
+        if events is not None:
+            events.append({"event": "summary", "text": summary})
+
