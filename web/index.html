@@ -393,6 +393,11 @@ const OV_MMD = `flowchart TD
     B -- "契约违约" --> B1["判失败：打印调度现场"]:::fail
     B --> C["任务表解析校验（纯代码）<br/>编号 / 岗位 / 评审对象 / 依赖"]:::code
     C --> D["按任务表派发 任务#N<br/>自包含任务描述"]:::code
+    D --> P1["分析型任务直发（无评审配对）<br/>如只读资料分析"]:::code
+    P1 --> P2["岗位执行（任务表指定·只读）<br/>LLM + 工具 read_file"]:::llm
+    P2 --> P3["产出回执：原样回灌调度岗记忆"]:::code
+    P3 --> P4["调度岗面向用户总结"]:::llm
+    P4 --> O
     D --> E["岗位执行（任务表指定）<br/>LLM + 工具 write_file"]:::llm
     E --> F{"解析协作信号（纯代码）"}:::code
     F -- "无信号" --> F1["终止：无法进入评审"]:::fail
@@ -417,7 +422,8 @@ const OV_MMD = `flowchart TD
     classDef ok fill:#0f2318,stroke:#22c55e,color:#a9e6bd`;
 
 /* 事件键 → Mermaid 节点 id（亮灯映射） */
-const OV_MAP = { plan: ["B"], code: ["E"], review: ["H"], verify: ["M"], done: ["O"] };
+const OV_MAP = { plan: ["B"], analyze: ["P2"], code: ["E"], review: ["H"],
+                 verify: ["M"], summary: ["P4"], done: ["O"] };
 
 let ovMode = "pending";       // mermaid | fallback
 const ovState = {};           // 兜底模式的状态表（沿用原实现）
@@ -687,6 +693,19 @@ function showResultOk(e) {
   resultMask.classList.add("open");
 }
 
+function showResultSummary(e) {
+  document.getElementById("badgeText").textContent = "运行完成";
+  document.getElementById("resultTitle").textContent = "调度岗总结";
+  document.getElementById("resultSummary").textContent =
+    "分析类任务已完成，以下为调度岗面向用户的总结。";
+  const body = document.getElementById("resultBody");
+  body.innerHTML = '<p class="direct-answer"></p>';
+  body.querySelector(".direct-answer").textContent = e.text || "（无内容）";
+  resultCard.className = "direct";
+  resultCard.id = "resultCard";
+  resultMask.classList.add("open");
+}
+
 function showResultFail(e) {
   const st = STAGE_MANUAL[e.stage] || STAGE_MANUAL["系统"];
   document.getElementById("badgeText").textContent = "运行失败";
@@ -733,7 +752,10 @@ function applyEvent(e) {
       break;
     }
     case "task_start": {
-      ovSet("code", "active");
+      // 无交付物的任务是分析型（如助理岗）：亮分析分支而非产出型分支
+      const pt = runTasks.find(x => x.id === e.task_id);
+      if (pt && !pt.deliverable) ovSet("analyze", "active");
+      else ovSet("code", "active");
       const role = taskRole[e.task_id] || "code";
       trAddNode(role, roleName(role) + " " + e.task_id, e.role ? roleName(e.role) : "");
       break;
@@ -771,6 +793,21 @@ function applyEvent(e) {
     case "verified":
       ovSet("verify", "done");
       trAddNode("verify", "交付核验", (e.declared || []).length + " 个文件");
+      break;
+    case "summary":
+      ovSet("analyze", "done");
+      if (resultMask.classList.contains("open")) {
+        // 混合任务：done 弹窗已开，总结追加进现有弹窗，不重复画终点节点
+        const p = document.createElement("p");
+        p.className = "direct-answer";
+        p.textContent = e.text || "";
+        document.getElementById("resultBody").appendChild(p);
+      } else {
+        ovSet("summary", "done");
+        ovSet("done", "done");
+        trAddNode("end", "✓ 完成", "分析类任务 · 已总结", { end: "end-ok" });
+        showResultSummary(e);
+      }
       break;
     case "usage":
       lastBill = `本轮账单：${e.calls} 次调用 · prompt ${e.prompt} + completion ${e.completion} tokens`;

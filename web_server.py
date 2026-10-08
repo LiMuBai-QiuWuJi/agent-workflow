@@ -35,6 +35,10 @@ WEB_PROJECT_ID = "web"
 
 app = FastAPI(title="agent-workflow", docs_url=None, redoc_url=None)
 
+"""终端 /web 同进程注入的共享记忆与工程 id（main.py 起服务时赋值）：
+非空时优先使用——网页端与终端是同一条记忆，/web 之前对话吸收的增量规则直接继承。"""
+SHARED: dict = {"memory": None, "project_id": ""}
+
 
 class SSESink:
     """事件汇：列表收集 + 队列推流，喂给 SSE。dispatcher 只调 append()。"""
@@ -60,15 +64,18 @@ def _run_pipeline(sink: SSESink, requirement: str) -> None:
     usage_base = len(USAGE_LOG)   # 本轮账单起点：服务器长驻，日志跨轮累计不清
     try:
         team = Team.seed_builtin()
-        memory = Memory()
+        memory = SHARED["memory"] or Memory()   # 默认自建（独立 uvicorn 启动）；/web 注入时与终端共享
         config = load_run_config()
         apply_run_config(team, config)
         collab = config.get("dispatch.collab", "True").strip().lower() != "false"
         core_only = config.get("verify.core_only", "True").strip().lower() != "false"
-        project_id = (config.get("project.id", "") or "").strip() or WEB_PROJECT_ID
+        project_id = (SHARED["project_id"]
+                      or (config.get("project.id", "") or "").strip()
+                      or WEB_PROJECT_ID)
 
         try:
-            tasks = plan_tasks(team, requirement, sink)
+            tasks = plan_tasks(team, requirement, sink,
+                               memory=memory, project_id=project_id)
         except DirectReply as e:
             sink.items[0].clear()          # 原地改：队列持有同一 dict 引用
             sink.items[0].update({"event": "direct_reply", "answer": e.answer})

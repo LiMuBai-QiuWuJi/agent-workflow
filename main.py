@@ -168,27 +168,29 @@ def apply_run_config(team, config: dict) -> None:
                 setattr(role, attr, type(getattr(role, attr))(value))
 
 
-def _run_web_server() -> None:
-    """起 uvicorn 并自动打开浏览器；Ctrl+C 停服务，回到需求循环。"""
-    import subprocess
+def _run_web_server(memory, project_id: str) -> None:
+    """同进程线程内起 uvicorn：与终端共享同一个 Memory——/web 之前聊出来的
+    跨轮记忆与增量规则，网页端直接继承；exit 退出主进程时服务一并关闭。"""
+    import threading
     import webbrowser
 
+    import uvicorn
+    import web_server
+
+    web_server.SHARED["memory"] = memory
+    web_server.SHARED["project_id"] = project_id
     url = "http://127.0.0.1:8000"
-    print(f"\n===== Web 运行视图：{url}（Ctrl+C 停服务返回需求循环）=====")
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "web_server:app",
-         "--host", "0.0.0.0", "--port", "8000"])
-    try:
-        webbrowser.open(url)
-        proc.wait()
-    except KeyboardInterrupt:
-        print("\n===== Web 服务已停止 =====")
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+    print(f"\n===== Web 运行视图：{url}（与终端共享记忆；exit 退出时一并关闭）=====")
+    threading.Thread(
+        target=uvicorn.run,
+        args=(web_server.app,),
+        kwargs={"host": "0.0.0.0", "port": 8000, "log_level": "warning",
+                # 终端模式重定向了 sys.stdout/stderr（Tee），uvicorn 默认 logging
+                # 配置会因此初始化失败；禁用 dictConfig，访问日志也关掉
+                "log_config": None, "access_log": False},
+        daemon=True,
+    ).start()
+    webbrowser.open(url)
 
 
 def main() -> None:
@@ -228,7 +230,7 @@ def main() -> None:
                 print("===== 已清除：岗位记忆与账单归零（编制与运行配置保留）=====")
                 continue
             if requirement.lower() == "/web":
-                _run_web_server()
+                _run_web_server(memory, PROJECT_ID)
                 continue
 
             round_no += 1
