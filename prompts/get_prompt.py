@@ -5,6 +5,7 @@ class PromptFileName(Enum):
     CODER       = "coder.md"
     TESTER      = "tester.md"
     SCHEDULER   = "scheduler.md"
+    ASSISTANT   = "assistant.md"
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 prompt_dir = os.path.join(script_dir,"prompt_file")

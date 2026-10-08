@@ -98,6 +98,20 @@ class Team:
             }
         ))
         team.add_role(Role(
+            key="assistant", name="助理岗",
+            duty="读取并分析指定资料/文件并直接输出结论（只读，无交付物）",
+            prompt_name=PromptFileName.ASSISTANT,
+            engine="deepseek", model="deepseek-flash",
+            temperature=0.3,
+            max_tokens=4096,
+            tools=[CALCULATOR_SCHEMA, READFILE_SCHEMAS],   # 只读权限：不给 write_file / run_cmd
+            tool_choice="auto",
+            tool_map={
+                "calculator": calculator,
+                "read_file": read_file,
+            }
+        ))
+        team.add_role(Role(
             key="scheduler", name="调度岗",
             duty="拆解需求为子任务并定岗位（管理岗，不执行具体工作）",
             prompt_name=PromptFileName.SCHEDULER,
