@@ -342,6 +342,30 @@ def plan_tasks(team: Team, requirement: str, events: list | None = None,
     return parse_task_table(reply, team)
 
 
+def report_back(memory: Memory, project_id: str, team: Team,
+                task_id: str, role_key: str, output: str | None) -> None:
+    """任务回执（纯代码，星型调度的信息回流边）：
+    无交付物的分析类任务（如助理岗的资料分析），产出原样回灌调度岗记忆——
+    用户跨轮追问"文件讲了什么/你遵循了什么"时，调度岗据此作答。
+    不截断：超长产出按 REPORT_BACK_CHUNK 分块顺序注入，调度岗记忆按序保留全文。
+    产出型任务不回执：其验收由确定性代码（交付核验）承担，调度岗不需要全文。"""
+    if memory is None or not (output or "").strip():
+        return
+    scheduler_prompt = team.load_prompt(team.get("scheduler"))
+    session = memory.get_session(project_id, "scheduler", scheduler_prompt)
+    text = (f"【任务回执】{task_id}［{role_key}］产出全文如下"
+            f"（系统原样转达，未截断，可直接引用）：\n{output.strip()}")
+    chunks = [text[i:i + REPORT_BACK_CHUNK]
+              for i in range(0, len(text), REPORT_BACK_CHUNK)]
+    session.add_user(chunks[0])
+    for c in chunks[1:]:
+        session.add_user("【任务回执·续】\n" + c)
+
+
+REPORT_BACK_CHUNK = 6000
+"""任务回执分块大小（字符）：超长产出分块注入而非截断，保证调度岗拿到全文。"""
+
+
 def run_pipeline(team: Team, memory: Memory, project_id: str,
                  tasks: list[Task],
                  core_only: bool = True, collab: bool = True,
@@ -382,4 +406,8 @@ def run_pipeline(team: Team, memory: Memory, project_id: str,
             print(f"\n----- {team.get(task.role_key).name} 产出（{task.id}） -----\n{reply}")
             out = reply
         prev_outputs[task.num] = out or "（该任务未成功产出）"
+        # 任务回执：分析类任务（无交付物）的产出原样回灌调度岗记忆，
+        # 后续轮次调度岗可基于回执回答用户追问（不截断，超长分块）
+        if not task.deliverable:
+            report_back(memory, project_id, team, task.id, task.role_key, out)
 
