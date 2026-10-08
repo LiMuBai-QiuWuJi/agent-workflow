@@ -89,6 +89,9 @@ def _run_pipeline(sink: SSESink, requirement: str) -> None:
                        "deliverable": t.deliverable,
                        "depends_on": t.depends_on}
                       for t in tasks],
+            # 编制表随 plan 事件下发：前端展示岗位名/泳道全靠它，新增岗位不用再改前端
+            "roles": [{"key": r.key, "name": r.name, "duty": r.duty}
+                      for r in team.roles.values() if r.key != "scheduler"],
         })
         run_pipeline(team, memory, project_id, tasks, core_only, collab, sink)
     except Exception as e:      # 最后一道闸：任何逃逸异常都变成 fail 事件

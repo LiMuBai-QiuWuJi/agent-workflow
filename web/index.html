@@ -393,11 +393,11 @@ const OV_MMD = `flowchart TD
     B -- "契约违约" --> B1["判失败：打印调度现场"]:::fail
     B --> C["任务表解析校验（纯代码）<br/>编号 / 岗位 / 评审对象 / 依赖"]:::code
     C --> D["按任务表派发 任务#N<br/>自包含任务描述"]:::code
-    D --> E["编码岗执行<br/>LLM + 工具 write_file"]:::llm
+    D --> E["岗位执行（任务表指定）<br/>LLM + 工具 write_file"]:::llm
     E --> F{"解析协作信号（纯代码）"}:::code
     F -- "无信号" --> F1["终止：无法进入评审"]:::fail
     F -- "解析到" --> G["配对评审任务派发<br/>评审岗由任务表指定"]:::code
-    G --> H["评审岗执行<br/>LLM + 工具 read_file / run_cmd"]:::llm
+    G --> H["评审执行（任务表指定）<br/>LLM + 工具 read_file / run_cmd"]:::llm
     H --> I{"解析评审结论（纯代码）"}:::code
     I -- "缺失" --> I1["视为不通过<br/>契约即合同"]:::code
     I -- "通过/不通过" --> J{"结论 = 通过 ?"}:::code
@@ -487,8 +487,8 @@ function ovLoop(round) {
 /* ---- 兜底：原手绘五节点简版 ---- */
 const OV_NODES = [
   { key: "plan",   label: "调度拆解", x: 80 },
-  { key: "code",   label: "编码",     x: 230 },
-  { key: "review", label: "评审",     x: 380 },
+  { key: "code",   label: "岗位执行", x: 230 },
+  { key: "review", label: "评审执行", x: 380 },
   { key: "verify", label: "交付核验", x: 530 },
   { key: "done",   label: "完成",     x: 668 },
 ];
@@ -526,12 +526,39 @@ function buildFallbackOverview() {
 /* ================= 轨迹图：按时间生长，退回画彩色回边 ================= */
 const trace = document.getElementById("trace");
 const TR_COLS = { plan: 90, code: 250, review: 410, verify: 540, end: 660 };
+/* 泳道系统：plan 事件的 roles 编制表 + 任务表驱动，新增岗位前端零改动。
+   旧录播没有 roles 字段时回退到 TR_COLS 默认布局与 key 本身。 */
+let teamInfo = {};                 // 岗位 key → 显示名（roles 编制表）
+let taskRole = {};                 // task_id → 岗位 key（泳道归属）
+let lanes = ["plan", "code", "review", "verify", "end"];   // 泳道键（按任务首次出现顺序）
+let laneX = { ...TR_COLS };        // 泳道键 → x 坐标
+const TR_HEAD_LABEL = { plan: "调度", verify: "交付核验", end: "完成" };
 let trPrev = null;      // 上一个节点 {x,y}
 let trRow = 0;
 
+function roleName(k) { return teamInfo[k] || k; }
+
+function trDrawLanes() {
+  const old = document.getElementById("tr-head");
+  if (old) old.remove();
+  const g = el("g", { id: "tr-head" }, trace);
+  for (const k of lanes) {
+    const t = el("text", { x: laneX[k], y: 24, "text-anchor": "middle",
+                           fill: "#8a94a8", "font-size": 12 }, g);
+    t.textContent = TR_HEAD_LABEL[k] || roleName(k);
+  }
+}
+
+function resetLanes() {
+  teamInfo = {};
+  taskRole = {};
+  lanes = ["plan", "code", "review", "verify", "end"];
+  laneX = { ...TR_COLS };
+}
+
 function trAddNode(colKey, label, sub, opts = {}) {
-  const x = TR_COLS[colKey];
-  const y = 46 + trRow * 66;
+  const x = laneX[colKey] ?? TR_COLS[colKey];
+  const y = 84 + trRow * 66;
   trRow++;
   const g = el("g", { class: "tr-node" + (opts.end ? " " + opts.end : "") }, trace);
   el("rect", { x: x - 55, y: y - 20, width: 110, height: 42, rx: 9 }, g);
@@ -686,22 +713,40 @@ function applyEvent(e) {
   statusEl.textContent = `#${e.seq} ${e.event}` +
     (e.task_id ? ` · ${e.task_id}` : "");
   switch (e.event) {
-    case "plan":
+    case "plan": {
       runTasks = e.tasks || [];
+      teamInfo = {};
+      for (const r of (e.roles || [])) teamInfo[r.key] = r.name;
+      taskRole = {};
+      for (const t of runTasks) taskRole[t.id] = t.role;
+      // 泳道 = 调度 + 任务表实际用到的岗位（按首次出现顺序）+ 交付核验 + 完成
+      const seen = [];
+      for (const t of runTasks) if (!seen.includes(t.role)) seen.push(t.role);
+      lanes = ["plan", ...seen, "verify", "end"];
+      laneX = {};
+      lanes.forEach((k, i) => {
+        laneX[k] = 90 + i * (620 / Math.max(1, lanes.length - 1));
+      });
+      trDrawLanes();
       ovSet("plan", "done");
-      trAddNode("plan", "调度拆解", `${e.tasks.length} 个任务`);
+      trAddNode("plan", "调度拆解", `${runTasks.length} 个任务`);
       break;
-    case "task_start":
+    }
+    case "task_start": {
       ovSet("code", "active");
-      trAddNode("code", "编码 " + e.task_id, e.role);
+      const role = taskRole[e.task_id] || "code";
+      trAddNode(role, roleName(role) + " " + e.task_id, e.role ? roleName(e.role) : "");
       break;
+    }
     case "dispatch":
       ovSet("code", "active");
       break;                       // 轨迹节点已在 task_start 落过（退回后的重派不新增）
-    case "review":
+    case "review": {
       ovSet("review", "active");
-      trAddNode("review", "评审 " + e.task_id, e.role);
+      const role = taskRole[e.task_id] || "review";
+      trAddNode(role, roleName(role) + " " + e.task_id, e.role ? roleName(e.role) : "");
       break;
+    }
     case "verdict":
       if (e.verdict === "通过") {
         ovSet("review", "done");
@@ -710,14 +755,19 @@ function applyEvent(e) {
         ovSet("review", "done");
       }
       break;
-    case "reject":
+    case "reject": {
       ovSet("code", "active");
       ovLoop(e.round);
-      trAddNode("code", "编码 " + e.task_id, "第 " + e.round + " 次修改", { back: e.round });
+      const role = taskRole[e.task_id] || "code";
+      trAddNode(role, roleName(role) + " " + e.task_id,
+                "第 " + e.round + " 次修改", { back: e.round });
       break;
-    case "truncation_recover":
-      trAddNode("review", "截断补发", e.task_id);
+    }
+    case "truncation_recover": {
+      const role = taskRole[e.task_id] || "review";
+      trAddNode(role, "截断补发", e.task_id);
       break;
+    }
     case "verified":
       ovSet("verify", "done");
       trAddNode("verify", "交付核验", (e.declared || []).length + " 个文件");
@@ -763,6 +813,8 @@ function resetCharts() {
     document.getElementById("ov-loop-label").setAttribute("opacity", 0);
   }
   trace.innerHTML = "";
+  resetLanes();
+  trDrawLanes();
   trPrev = null;
   trRow = 0;
   lastBill = "";

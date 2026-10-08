@@ -259,7 +259,9 @@ def main() -> None:
                                         "review_of": t.review_of,
                                         "deliverable": t.deliverable,
                                         "depends_on": t.depends_on}
-                                       for t in tasks]}
+                                       for t in tasks],
+                             "roles": [{"key": r.key, "name": r.name, "duty": r.duty}
+                                       for r in team.roles.values() if r.key != "scheduler"]}
                 print("\n----- 调度岗任务表 -----")
                 for t in tasks:
                     tag = f"[评审 {t.review_of}] " if t.review_of else ""
