@@ -235,7 +235,8 @@ def main() -> None:
             usage_base = len(USAGE_LOG)   # 本轮账单起点：进程长驻，账单跨轮累计不清
             events: list[dict] = []      # 事件流：Web 总览图/轨迹图与 SSE 的统一数据源
             try:
-                tasks = plan_tasks(team, requirement, events)
+                tasks = plan_tasks(team, requirement, events,
+                                   memory=memory, project_id=PROJECT_ID)
             except DirectReply as e:
                 # 问候/自我介绍/纯问答：调度岗直接应答，不拆解也不判失败。
                 # 队列/列表持有 plan dict 引用，原地改成 direct_reply（SSE 与 JSONL 同步）。

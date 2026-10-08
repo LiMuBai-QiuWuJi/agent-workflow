@@ -290,12 +290,15 @@ def run_review_chain(team: Team, memory: Memory, project_id: str,
         print(f"\n----- 编码岗产出（第 {n} 次退回后，{task_id}） -----\n{coder_reply}")
 
 
-def plan_tasks(team: Team, requirement: str, events: list | None = None) -> list[Task]:
+def plan_tasks(team: Team, requirement: str, events: list | None = None,
+               memory: Memory = None, project_id: str = "demo") -> list[Task]:
     """调度决策入口：编制表 + 需求 → 调度岗 LLM → 任务表。
 
     这是"智能分工"的落点：调度岗是唯一能决定"拆几件、给谁做、谁审谁"的 LLM，
     它随需求收到团队编制表（Team.roster_text），只能用表里的岗位。
-    契约违约抛 TaskTableError（raw=调度岗原始产出），调用方判失败终止。"""
+    契约违约抛 TaskTableError（raw=调度岗原始产出），调用方判失败终止。
+    memory 不为 None 时调度岗会话同样按 (project_id, "scheduler") 持久并收尾沉淀，
+    跨轮对话记忆对调度岗生效（问候/追问类需求依赖这一点）。"""
     role = team.get("scheduler")
     user_input = (
         f"当前团队编制：\n{team.roster_text()}\n\n"
@@ -312,8 +315,28 @@ def plan_tasks(team: Team, requirement: str, events: list | None = None) -> list
         max_tokens=role.max_tokens,
         timeout=TIMEOUT,
         stream=False,
+        context_mode="recent",
+        context_window=10,     # 与 dispatch 同口径：跨轮保留最近 10 轮精炼记忆
     )
-    reply = call_llm(params, session=ChatSession(params.system_prompt))
+    if memory is None:
+        session = ChatSession(params.system_prompt)
+        reply = call_llm(params, session=session)
+    else:
+        session = memory.get_session(project_id, "scheduler", params.system_prompt)
+        reply = call_llm(params, session=session)
+        memory.settle(session)      # 任务收尾：中间消息丢弃，只沉淀「任务+产出」
+
+    if not (reply or "").strip():
+        # 空产出防护（2026-10-08 实测：账单 completion=639 但正文为空的 provider 行为）：
+        # 不解析、不判违约，先给一次补发机会；仍空才走契约违约。
+        params.user_input = (
+            "系统提示：你上一轮的输出为空。请重新回应本需求："
+            "问候/纯问答直接回答；工程需求按输出契约拆解成任务表。"
+        )
+        reply = call_llm(params, session=session)
+        if memory is not None:
+            memory.settle(session)
+
     if events is not None:
         events.append({"event": "plan", "raw": reply})
     return parse_task_table(reply, team)
